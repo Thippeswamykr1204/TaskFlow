@@ -10,6 +10,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
 import { AttachmentsService } from './attachments.service';
+import { MailService } from '../mail/mail.service';
 
 interface TasksResponse {
   success: boolean;
@@ -35,9 +36,10 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<Task>,
     private attachmentsService: AttachmentsService,
+    private mailService: MailService,
   ) {}
 
-  async create(dto: CreateTaskDto, userId: string): Promise<Task> {
+  async create(dto: CreateTaskDto, userId: string, userEmail: string): Promise<Task> {
     const taskData: any = {
       ...dto,
       user: userId,
@@ -48,7 +50,16 @@ export class TasksService {
     }
 
     const task = new this.taskModel(taskData);
-    return task.save();
+    const saved = await task.save();
+
+    // Fire-and-forget from the caller's perspective: MailService swallows
+    // its own errors and has an internal timeout, so this can't fail or
+    // hang the create request — it's still awaited so a slow email
+    // provider can't leave a dangling unhandled promise, but it never
+    // throws back up to here.
+    await this.mailService.sendTaskCreatedEmail(userEmail, saved);
+
+    return saved;
   }
 
   async findAll(userId: string, query: QueryTasksDto): Promise<TasksResponse> {
@@ -138,6 +149,7 @@ export class TasksService {
     id: string,
     userId: string,
     dto: UpdateTaskDto,
+    userEmail: string,
   ): Promise<Task> {
     // Verify ownership at data layer
     const task = await this.taskModel.findOne({
@@ -154,11 +166,13 @@ export class TasksService {
 
     const setData: any = { ...dto };
     let shouldUnsetCompletedAt = false;
+    let shouldSetCompletedAt = false;
 
     // Handle completedAt based on status transition
     if (dto.status !== undefined) {
       if (dto.status === TaskStatus.DONE && !task.completedAt) {
         setData.completedAt = new Date();
+        shouldSetCompletedAt = true;
       } else if (dto.status !== TaskStatus.DONE && task.completedAt) {
         delete setData.completedAt;
         shouldUnsetCompletedAt = true;
@@ -184,6 +198,12 @@ export class TasksService {
         error: 'TASK_NOT_FOUND',
         message: 'Task not found',
       });
+    }
+
+    // Only fires on the BACKLOG/TODO/IN_PROGRESS -> DONE transition, never
+    // on a subsequent update to a task that's already DONE.
+    if (shouldSetCompletedAt) {
+      await this.mailService.sendTaskCompletedEmail(userEmail, updated);
     }
 
     return updated;

@@ -78,7 +78,7 @@ export class TasksController {
   @ApiResponse({ status: 201, description: 'Task created', type: Task })
   @ApiResponse({ status: 400, description: 'Validation error' })
   async create(@Body() dto: CreateTaskDto, @Req() req: AuthRequest) {
-    const task = await this.tasksService.create(dto, req.user.id);
+    const task = await this.tasksService.create(dto, req.user.id, req.user.email);
     return { success: true, data: task };
   }
 
@@ -101,7 +101,7 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
     @Req() req: AuthRequest,
   ) {
-    const task = await this.tasksService.update(id, req.user.id, dto);
+    const task = await this.tasksService.update(id, req.user.id, dto, req.user.email);
     return { success: true, data: task };
   }
 
