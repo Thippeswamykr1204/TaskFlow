@@ -25,10 +25,13 @@ import {
 } from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
 import { AttachmentsService } from './attachments.service';
+import { ActivityService } from './activity.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
+import { QueryActivityDto } from './dto/query-activity.dto';
 import { AttachmentResponseDto } from './dto/attachment-response.dto';
+import { ActivityResponseDto } from './dto/activity-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Task } from './schemas/task.schema';
 import { AttachmentValidationPipe } from '../uploads/attachment-validation.pipe';
@@ -45,6 +48,7 @@ export class TasksController {
   constructor(
     private tasksService: TasksService,
     private attachmentsService: AttachmentsService,
+    private activityService: ActivityService,
   ) {}
 
   @Get()
@@ -141,6 +145,27 @@ export class TasksController {
   ) {
     const attachment = await this.attachmentsService.create(taskId, req.user.id, file);
     return { success: true, data: attachment };
+  }
+
+  @Get(':id/activity')
+  @ApiOperation({ summary: 'Get the activity history for a task' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Activity history', type: [ActivityResponseDto] })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  async getActivity(
+    @Param('id') taskId: string,
+    @Query() query: QueryActivityDto,
+    @Req() req: AuthRequest,
+  ) {
+    // Ownership check — throws 404 if the task doesn't belong to this user.
+    await this.tasksService.findOne(taskId, req.user.id);
+    const { data, meta } = await this.activityService.findForTask(
+      taskId,
+      query.page,
+      query.limit,
+    );
+    return { success: true, data, meta };
   }
 
   @Delete(':id/attachments/:attachmentId')

@@ -5,6 +5,8 @@ import { Attachment } from './schemas/attachment.schema';
 import { Task } from './schemas/task.schema';
 import { CloudinaryService } from '../uploads/cloudinary.service';
 import { resourceTypeForMime } from '../uploads/attachment-validation.pipe';
+import { ActivityService } from './activity.service';
+import { ActivityAction } from './schemas/activity-log.schema';
 
 @Injectable()
 export class AttachmentsService {
@@ -12,6 +14,7 @@ export class AttachmentsService {
     @InjectModel(Attachment.name) private attachmentModel: Model<Attachment>,
     @InjectModel(Task.name) private taskModel: Model<Task>,
     private cloudinaryService: CloudinaryService,
+    private activityService: ActivityService,
   ) {}
 
   private async assertTaskOwnership(taskId: string, userId: string): Promise<void> {
@@ -56,7 +59,12 @@ export class AttachmentsService {
       task: taskId,
     });
 
-    return attachment.save();
+    const saved = await attachment.save();
+    await this.activityService.record(taskId, ActivityAction.ATTACHMENT_ADDED, {
+      fileName: saved.fileName,
+    });
+
+    return saved;
   }
 
   async delete(taskId: string, userId: string, attachmentId: string): Promise<void> {
@@ -79,6 +87,9 @@ export class AttachmentsService {
     await this.cloudinaryService.destroy(attachment.publicId, attachment.resourceType);
 
     await this.attachmentModel.deleteOne({ _id: attachmentId });
+    await this.activityService.record(taskId, ActivityAction.ATTACHMENT_REMOVED, {
+      fileName: attachment.fileName,
+    });
   }
 
   /**

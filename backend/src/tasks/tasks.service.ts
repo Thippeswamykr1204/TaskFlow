@@ -10,6 +10,8 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
 import { AttachmentsService } from './attachments.service';
+import { ActivityService } from './activity.service';
+import { ActivityAction } from './schemas/activity-log.schema';
 import { MailService } from '../mail/mail.service';
 import { LocationService } from '../location/location.service';
 
@@ -37,6 +39,7 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<Task>,
     private attachmentsService: AttachmentsService,
+    private activityService: ActivityService,
     private mailService: MailService,
     private locationService: LocationService,
   ) {}
@@ -75,6 +78,7 @@ export class TasksService {
     // provider can't leave a dangling unhandled promise, but it never
     // throws back up to here.
     await this.mailService.sendTaskCreatedEmail(userEmail, saved);
+    await this.activityService.record(saved._id, ActivityAction.CREATED);
 
     return saved;
   }
@@ -239,7 +243,50 @@ export class TasksService {
       await this.mailService.sendTaskCompletedEmail(userEmail, updated);
     }
 
+    await this.recordUpdateActivity(task, dto);
+
     return updated;
+  }
+
+  // Logs one activity entry per recognized field change (status, priority,
+  // due date), plus a generic "updated" entry for anything else in the DTO
+  // (title, description, tags, subtasks, location) so those aren't silently
+  // dropped from the history.
+  private async recordUpdateActivity(
+    before: Task,
+    dto: UpdateTaskDto,
+  ): Promise<void> {
+    if (dto.status !== undefined && dto.status !== before.status) {
+      await this.activityService.record(before._id, ActivityAction.STATUS_CHANGED, {
+        from: before.status,
+        to: dto.status,
+      });
+    }
+
+    if (dto.priority !== undefined && dto.priority !== before.priority) {
+      await this.activityService.record(before._id, ActivityAction.PRIORITY_CHANGED, {
+        from: before.priority,
+        to: dto.priority,
+      });
+    }
+
+    if (dto.dueDate !== undefined) {
+      const nextDueDate = new Date(dto.dueDate).toISOString();
+      const prevDueDate = before.dueDate ? before.dueDate.toISOString() : null;
+      if (nextDueDate !== prevDueDate) {
+        await this.activityService.record(before._id, ActivityAction.DUE_DATE_CHANGED, {
+          from: prevDueDate,
+          to: nextDueDate,
+        });
+      }
+    }
+
+    const otherFieldsChanged = Object.keys(dto).some(
+      (key) => !['status', 'priority', 'dueDate'].includes(key),
+    );
+    if (otherFieldsChanged) {
+      await this.activityService.record(before._id, ActivityAction.UPDATED);
+    }
   }
 
   async delete(id: string, userId: string): Promise<void> {
