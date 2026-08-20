@@ -31,6 +31,12 @@ export const envSchema = z.object({
     .string()
     .min(1, 'CLOUDINARY_API_SECRET is required'),
   MAX_ATTACHMENT_SIZE_MB: z.coerce.number().positive().default(10),
+  RESEND_API_KEY: z
+    .string()
+    .min(1, 'RESEND_API_KEY is required'),
+  EMAIL_FROM_ADDRESS: z
+    .string()
+    .min(1, 'EMAIL_FROM_ADDRESS is required'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
