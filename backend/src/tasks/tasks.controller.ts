@@ -8,22 +8,30 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   Req,
   HttpCode,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
+import { AttachmentsService } from './attachments.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
+import { AttachmentResponseDto } from './dto/attachment-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Task } from './schemas/task.schema';
+import { AttachmentValidationPipe } from '../uploads/attachment-validation.pipe';
 
 interface AuthRequest extends Express.Request {
   user?: { id: string; email: string };
@@ -34,7 +42,10 @@ interface AuthRequest extends Express.Request {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class TasksController {
-  constructor(private tasksService: TasksService) {}
+  constructor(
+    private tasksService: TasksService,
+    private attachmentsService: AttachmentsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List tasks with filters and pagination' })
@@ -101,5 +112,48 @@ export class TasksController {
   @ApiResponse({ status: 404, description: 'Task not found' })
   async delete(@Param('id') id: string, @Req() req: AuthRequest) {
     await this.tasksService.delete(id, req.user.id);
+  }
+
+  @Post(':id/attachments')
+  @HttpCode(201)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload an attachment to a task' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Attachment created', type: AttachmentResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid file (type or size)' })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 502, description: 'Upload to Cloudinary failed' })
+  async uploadAttachment(
+    @Param('id') taskId: string,
+    @UploadedFile(AttachmentValidationPipe) file: Express.Multer.File,
+    @Req() req: AuthRequest,
+  ) {
+    const attachment = await this.attachmentsService.create(taskId, req.user.id, file);
+    return { success: true, data: attachment };
+  }
+
+  @Delete(':id/attachments/:attachmentId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete an attachment from a task' })
+  @ApiResponse({ status: 204, description: 'Attachment deleted' })
+  @ApiResponse({ status: 404, description: 'Task or attachment not found' })
+  @ApiResponse({ status: 502, description: 'Cloudinary delete failed' })
+  async deleteAttachment(
+    @Param('id') taskId: string,
+    @Param('attachmentId') attachmentId: string,
+    @Req() req: AuthRequest,
+  ) {
+    await this.attachmentsService.delete(taskId, req.user.id, attachmentId);
   }
 }
