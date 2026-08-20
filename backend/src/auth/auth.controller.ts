@@ -48,24 +48,7 @@ export class AuthController {
     @Res() res: Response,
     @Req() req: AuthRequest,
   ) {
-    const { accessToken, user } = await this.authService.register(dto);
-    const userAgent = req.headers['user-agent'] || '';
-    const ip = req.ip || '';
-
-    const refreshToken = (await this.authService['issueTokens'](
-      user._id.toString(),
-      user.email,
-      userAgent,
-      ip,
-    )).refreshToken;
-
-    await this.authService['createSession'](
-      user._id.toString(),
-      refreshToken,
-      userAgent,
-      ip,
-      7 * 24 * 60 * 60 * 1000,
-    );
+    const { accessToken, user, refreshToken } = await this.authService.register(dto);
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -74,7 +57,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ user, accessToken });
+    return res.status(201).json({ user, accessToken });
   }
 
   @Post('login')
@@ -91,25 +74,10 @@ export class AuthController {
     const userAgent = req.headers['user-agent'] || '';
     const ip = req.ip || '';
 
-    const { accessToken, user } = await this.authService.login(
+    const { accessToken, user, refreshToken } = await this.authService.login(
       dto,
       userAgent,
       ip,
-    );
-
-    const refreshToken = (await this.authService['issueTokens'](
-      user._id.toString(),
-      user.email,
-      userAgent,
-      ip,
-    )).refreshToken;
-
-    await this.authService['createSession'](
-      user._id.toString(),
-      refreshToken,
-      userAgent,
-      ip,
-      7 * 24 * 60 * 60 * 1000,
     );
 
     res.cookie('refreshToken', refreshToken, {
@@ -145,18 +113,11 @@ export class AuthController {
     const userAgent = req.headers['user-agent'] || '';
     const ip = req.ip || '';
 
-    const { accessToken, user } = await this.authService.refresh(
+    const { accessToken, user, refreshToken: newRefreshToken } = await this.authService.refresh(
       refreshToken,
       userAgent,
       ip,
     );
-
-    const newRefreshToken = (await this.authService['issueTokens'](
-      user._id.toString(),
-      user.email,
-      userAgent,
-      ip,
-    )).refreshToken;
 
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
