@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { validateEnv, EnvConfig } from './config/env.validation';
 import { AuthModule } from './auth/auth.module';
 import { TasksModule } from './tasks/tasks.module';
+import { LocationModule } from './location/location.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { TasksModule } from './tasks/tasks.module';
     }),
     AuthModule,
     TasksModule,
+    LocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

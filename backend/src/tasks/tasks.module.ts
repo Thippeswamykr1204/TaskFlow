@@ -8,6 +8,7 @@ import { Attachment, AttachmentSchema } from './schemas/attachment.schema';
 import { UploadsModule } from '../uploads/uploads.module';
 import { AttachmentValidationPipe } from '../uploads/attachment-validation.pipe';
 import { MailModule } from '../mail/mail.module';
+import { LocationModule } from '../location/location.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MailModule } from '../mail/mail.module';
     ]),
     UploadsModule,
     MailModule,
+    LocationModule,
   ],
   controllers: [TasksController],
   providers: [TasksService, AttachmentsService, AttachmentValidationPipe],

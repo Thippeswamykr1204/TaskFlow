@@ -11,6 +11,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
 import { AttachmentsService } from './attachments.service';
 import { MailService } from '../mail/mail.service';
+import { LocationService } from '../location/location.service';
 
 interface TasksResponse {
   success: boolean;
@@ -37,6 +38,7 @@ export class TasksService {
     @InjectModel(Task.name) private taskModel: Model<Task>,
     private attachmentsService: AttachmentsService,
     private mailService: MailService,
+    private locationService: LocationService,
   ) {}
 
   async create(dto: CreateTaskDto, userId: string, userEmail: string): Promise<Task> {
@@ -47,6 +49,21 @@ export class TasksService {
 
     if (dto.dueDate) {
       taskData.dueDate = new Date(dto.dueDate);
+    }
+
+    // Resolve city to lat/lng if city is provided but lat/lng are not
+    if (
+      dto.location?.city &&
+      (!dto.location.lat || !dto.location.lng)
+    ) {
+      const resolved = await this.locationService.resolveLocation(
+        dto.location.city,
+      );
+      if (resolved) {
+        taskData.location.lat = resolved.lat;
+        taskData.location.lng = resolved.lng;
+      }
+      // If resolution fails, still save task with just the city string
     }
 
     const task = new this.taskModel(taskData);
@@ -181,6 +198,22 @@ export class TasksService {
 
     if (dto.dueDate) {
       setData.dueDate = new Date(dto.dueDate);
+    }
+
+    // Resolve city to lat/lng if location.city changed and lat/lng not provided
+    if (
+      dto.location?.city &&
+      (!dto.location.lat || !dto.location.lng)
+    ) {
+      const resolved = await this.locationService.resolveLocation(
+        dto.location.city,
+      );
+      if (resolved) {
+        setData.location = setData.location || {};
+        setData.location.lat = resolved.lat;
+        setData.location.lng = resolved.lng;
+      }
+      // If resolution fails, still update with just the city string
     }
 
     const updateQuery: any = shouldUnsetCompletedAt
