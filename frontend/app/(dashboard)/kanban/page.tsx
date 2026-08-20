@@ -1,6 +1,6 @@
 "use client";
 
-import { DndContext, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, useDroppable, useSensor, useSensors, PointerSensor, type DragEndEvent } from "@dnd-kit/core";
 import { KanbanCard } from "@/components/dashboard/kanban-card";
 import { TaskListError } from "@/components/dashboard/empty-state";
 import { TaskFormModal } from "@/components/tasks/task-form-modal";
@@ -61,6 +61,16 @@ export default function KanbanPage() {
   const { data, isLoading, isError, refetch } = useTasks({ limit: 500 });
   const updateTask = useUpdateTask();
 
+  // Require ~8px of pointer movement before a drag session starts, so a
+  // plain click on a card (no meaningful movement) never gets treated as a
+  // drag in the first place. Kept in sync with the click-vs-drag distance
+  // check in KanbanCard.
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  );
+
   const tasksByStatus: Record<TaskStatus, Task[]> = {
     BACKLOG: [],
     TODO: [],
@@ -109,7 +119,7 @@ export default function KanbanPage() {
         {isError && <TaskListError onRetry={() => refetch()} />}
 
         {data && (
-          <DndContext onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {taskStatusValues.map((status) => (
                 <KanbanColumn
