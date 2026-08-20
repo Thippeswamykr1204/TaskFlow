@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, ListChecks, Kanban, BarChart3, Settings, ChevronsLeft } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { useUiStore } from "@/lib/store/ui-store";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const navItems: { label: string; href: string; icon: LucideIcon; soon?: boolean }[] = [
   { label: "Overview", href: "/dashboard", icon: LayoutGrid },
   { label: "My Tasks", href: "/tasks", icon: ListChecks },
-  { label: "Kanban", href: "#", icon: Kanban, soon: true },
-  { label: "Analytics", href: "#", icon: BarChart3, soon: true },
+  { label: "Kanban", href: "/kanban", icon: Kanban },
+  { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Settings", href: "#", icon: Settings },
 ];
 
