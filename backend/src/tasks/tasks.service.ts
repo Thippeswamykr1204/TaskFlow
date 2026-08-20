@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Task, TaskStatus } from './schemas/task.schema';
+import { Task, TaskStatus, Priority } from './schemas/task.schema';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
@@ -18,6 +18,15 @@ interface TasksResponse {
     page: number;
     lastPage: number;
   };
+}
+
+interface TaskStats {
+  total: number;
+  byStatus: Record<TaskStatus, number>;
+  byPriority: Record<Priority, number>;
+  overdue: number;
+  completedThisWeek: number;
+  completionRate: number;
 }
 
 @Injectable()
@@ -139,24 +148,39 @@ export class TasksService {
       });
     }
 
-    const updateData: any = { ...dto };
+    const setData: any = { ...dto };
+    let shouldUnsetCompletedAt = false;
 
     // Handle completedAt based on status transition
     if (dto.status !== undefined) {
       if (dto.status === TaskStatus.DONE && !task.completedAt) {
-        updateData.completedAt = new Date();
+        setData.completedAt = new Date();
       } else if (dto.status !== TaskStatus.DONE && task.completedAt) {
-        updateData.completedAt = undefined;
+        delete setData.completedAt;
+        shouldUnsetCompletedAt = true;
       }
     }
 
     if (dto.dueDate) {
-      updateData.dueDate = new Date(dto.dueDate);
+      setData.dueDate = new Date(dto.dueDate);
     }
 
-    const updated = await this.taskModel.findByIdAndUpdate(id, updateData, {
-      new: true,
-    });
+    const updateQuery: any = shouldUnsetCompletedAt
+      ? { $set: setData, $unset: { completedAt: '' } }
+      : { $set: setData };
+
+    const updated = await this.taskModel.findOneAndUpdate(
+      { _id: id, user: userId },
+      updateQuery,
+      { new: true },
+    );
+
+    if (!updated) {
+      throw new NotFoundException({
+        error: 'TASK_NOT_FOUND',
+        message: 'Task not found',
+      });
+    }
 
     return updated;
   }
@@ -173,5 +197,82 @@ export class TasksService {
         message: 'Task not found',
       });
     }
+  }
+
+  async getStats(userId: string): Promise<TaskStats> {
+    const { Types } = await import('mongoose');
+    const userObjectId = new Types.ObjectId(userId);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const statuses = Object.values(TaskStatus);
+    const priorities = Object.values(Priority);
+
+    const [result] = await this.taskModel.aggregate([
+      { $match: { user: userObjectId } },
+      {
+        $facet: {
+          total: [{ $count: 'count' }],
+          byStatus: [
+            { $group: { _id: '$status', count: { $sum: 1 } } },
+          ],
+          byPriority: [
+            { $group: { _id: '$priority', count: { $sum: 1 } } },
+          ],
+          overdue: [
+            {
+              $match: {
+                dueDate: { $lt: now },
+                status: { $ne: TaskStatus.DONE },
+              },
+            },
+            { $count: 'count' },
+          ],
+          completedThisWeek: [
+            {
+              $match: {
+                completedAt: { $gte: sevenDaysAgo, $lte: now },
+              },
+            },
+            { $count: 'count' },
+          ],
+          doneCount: [
+            { $match: { status: TaskStatus.DONE } },
+            { $count: 'count' },
+          ],
+        },
+      },
+    ]);
+
+    const total = result.total[0]?.count || 0;
+    const doneCount = result.doneCount[0]?.count || 0;
+
+    const byStatus = statuses.reduce((acc, status) => {
+      acc[status] = 0;
+      return acc;
+    }, {} as Record<TaskStatus, number>);
+    for (const entry of result.byStatus) {
+      byStatus[entry._id as TaskStatus] = entry.count;
+    }
+
+    const byPriority = priorities.reduce((acc, priority) => {
+      acc[priority] = 0;
+      return acc;
+    }, {} as Record<Priority, number>);
+    for (const entry of result.byPriority) {
+      byPriority[entry._id as Priority] = entry.count;
+    }
+
+    const completionRate =
+      total === 0 ? 0 : Math.round((doneCount / total) * 100) / 100;
+
+    return {
+      total,
+      byStatus,
+      byPriority,
+      overdue: result.overdue[0]?.count || 0,
+      completedThisWeek: result.completedThisWeek[0]?.count || 0,
+      completionRate,
+    };
   }
 }
