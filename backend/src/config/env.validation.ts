@@ -21,6 +21,16 @@ export const envSchema = z.object({
     .string()
     .min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),
   CORS_ORIGIN: z.string().min(1).default('http://localhost:3001'),
+  CLOUDINARY_CLOUD_NAME: z
+    .string()
+    .min(1, 'CLOUDINARY_CLOUD_NAME is required'),
+  CLOUDINARY_API_KEY: z
+    .string()
+    .min(1, 'CLOUDINARY_API_KEY is required'),
+  CLOUDINARY_API_SECRET: z
+    .string()
+    .min(1, 'CLOUDINARY_API_SECRET is required'),
+  MAX_ATTACHMENT_SIZE_MB: z.coerce.number().positive().default(10),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
