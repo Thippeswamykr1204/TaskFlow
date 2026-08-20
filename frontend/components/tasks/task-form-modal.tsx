@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorBanner } from "@/components/auth/error-banner";
 import { WeatherChip } from "@/components/weather-chip";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
+import { TaskActivity } from "@/components/tasks/task-activity";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useCreateTask, useUpdateTask, useDeleteTask, useTasks } from "@/lib/hooks/use-tasks";
 import { taskFormSchema, taskStatusValues, priorityValues, type TaskFormValues } from "@/lib/validation/task-schemas";
@@ -324,6 +325,10 @@ export function TaskFormModal() {
           </div>
 
           {isEdit && editingTaskId && <TaskAttachments taskId={editingTaskId} />}
+
+          {isEdit && editingTaskId && (
+            <TaskActivity taskId={editingTaskId} enabled={taskModalOpen} />
+          )}
 
           <div className="flex items-center justify-between pt-2">
             {isEdit ? (
