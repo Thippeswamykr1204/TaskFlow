@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TaskRow, TaskRowSkeleton } from "@/components/dashboard/task-row";
@@ -196,11 +197,22 @@ export default function TasksPage() {
 
         {tasks.length > 0 && (
           <div>
-            {tasks.map((task) => (
-              <div key={task._id} onClick={() => openEditTaskModal(task._id)} className="cursor-pointer">
-                <TaskRow task={task} />
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {tasks.map((task) => (
+                <motion.div
+                  key={task._id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  onClick={() => openEditTaskModal(task._id)}
+                  className="cursor-pointer"
+                >
+                  <TaskRow task={task} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </div>
