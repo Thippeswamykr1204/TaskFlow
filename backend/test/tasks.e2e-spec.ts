@@ -391,4 +391,133 @@ describe('Tasks (e2e)', () => {
         .expect(401);
     });
   });
+
+  describe('GET /tasks/stats', () => {
+    let statsUserAToken: string;
+    let statsUserBToken: string;
+
+    beforeAll(async () => {
+      // Fresh users so counts are exact and don't collide with tasks
+      // created by earlier describe blocks in this file.
+      const regA = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          name: 'Stats User A',
+          email: 'statsusera@example.com',
+          password: 'SecurePass123!',
+        });
+      statsUserAToken = regA.body.accessToken;
+
+      const regB = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          name: 'Stats User B',
+          email: 'statsuserb@example.com',
+          password: 'SecurePass123!',
+        });
+      statsUserBToken = regB.body.accessToken;
+
+      const now = Date.now();
+      const past = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
+      const future = new Date(now + 2 * 24 * 60 * 60 * 1000).toISOString();
+
+      // User A: 5 tasks total — 1 TODO (overdue), 1 IN_PROGRESS, 1 BACKLOG, 2 DONE.
+      // status is set explicitly on create: CreateTaskDto supports it, and a task
+      // created with no status defaults to BACKLOG regardless of what its title says.
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({
+          title: 'A-todo-overdue',
+          status: TaskStatus.TODO,
+          priority: Priority.HIGH,
+          dueDate: past,
+        });
+
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({
+          title: 'A-in-progress',
+          status: TaskStatus.IN_PROGRESS,
+          priority: Priority.MEDIUM,
+          dueDate: future,
+        });
+
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({ title: 'A-backlog', priority: Priority.LOW });
+
+      const doneRes1 = await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({ title: 'A-done-1', priority: Priority.LOW });
+      await request(app.getHttpServer())
+        .patch(`/tasks/${doneRes1.body.data._id}`)
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({ status: TaskStatus.DONE });
+
+      const doneRes2 = await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({ title: 'A-done-2', priority: Priority.URGENT });
+      await request(app.getHttpServer())
+        .patch(`/tasks/${doneRes2.body.data._id}`)
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .send({ status: TaskStatus.DONE });
+
+      // User B: a completely different set — must never leak into A's stats
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserBToken}`)
+        .send({
+          title: 'B-task-1',
+          status: TaskStatus.TODO,
+          priority: Priority.URGENT,
+          dueDate: past,
+        });
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${statsUserBToken}`)
+        .send({ title: 'B-task-2', priority: Priority.URGENT });
+    });
+
+    it('should require authentication', async () => {
+      await request(app.getHttpServer()).get('/tasks/stats').expect(401);
+    });
+
+    it('should return stats scoped only to the requesting user', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/tasks/stats')
+        .set('Authorization', `Bearer ${statsUserAToken}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      const { data } = res.body;
+
+      // BACKLOG:1, TODO:1 (overdue), IN_PROGRESS:1, DONE:2 = 5 total
+      expect(data.total).toBe(5);
+      expect(data.byStatus).toEqual({
+        BACKLOG: 1,
+        TODO: 1,
+        IN_PROGRESS: 1,
+        DONE: 2,
+      });
+      expect(data.overdue).toBe(1);
+      expect(data.completedThisWeek).toBe(2);
+      expect(data.completionRate).toBe(0.4);
+    });
+
+    it("should not include another user's tasks in the stats", async () => {
+      const res = await request(app.getHttpServer())
+        .get('/tasks/stats')
+        .set('Authorization', `Bearer ${statsUserBToken}`)
+        .expect(200);
+
+      expect(res.body.data.total).toBe(2);
+      expect(res.body.data.byStatus.DONE).toBe(0);
+      expect(res.body.data.completionRate).toBe(0);
+    });
+  });
 });

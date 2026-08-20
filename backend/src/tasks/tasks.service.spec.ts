@@ -13,9 +13,10 @@ describe('TasksService', () => {
       create: jest.fn(),
       find: jest.fn().mockReturnThis(),
       findOne: jest.fn(),
-      findByIdAndUpdate: jest.fn(),
+      findOneAndUpdate: jest.fn(),
       deleteOne: jest.fn(),
       countDocuments: jest.fn(),
+      aggregate: jest.fn(),
       sort: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
@@ -166,10 +167,27 @@ describe('TasksService', () => {
       const updated = { ...mockTask, title: 'Updated' };
 
       mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findByIdAndUpdate.mockResolvedValue(updated);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue(updated);
 
       const result = await service.update(taskId, userId, { title: 'Updated' });
       expect(result.title).toBe('Updated');
+    });
+
+    it('should scope the write itself to the owning user, not just the read', async () => {
+      const userId = 'user123';
+      const taskId = 'task1';
+      const mockTask = { _id: taskId, title: 'Task 1', status: TaskStatus.BACKLOG, user: userId };
+
+      mockTaskModel.findOne.mockResolvedValue(mockTask);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue({ ...mockTask, title: 'Updated' });
+
+      await service.update(taskId, userId, { title: 'Updated' });
+
+      expect(mockTaskModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: taskId, user: userId },
+        expect.anything(),
+        { new: true },
+      );
     });
 
     it('should set completedAt when status changes to DONE', async () => {
@@ -179,23 +197,37 @@ describe('TasksService', () => {
       const updated = { ...mockTask, status: TaskStatus.DONE, completedAt: new Date() };
 
       mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findByIdAndUpdate.mockResolvedValue(updated);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue(updated);
 
       const result = await service.update(taskId, userId, { status: TaskStatus.DONE });
       expect(result.status).toBe(TaskStatus.DONE);
+      expect(mockTaskModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: taskId, user: userId },
+        { $set: expect.objectContaining({ completedAt: expect.any(Date) }) },
+        { new: true },
+      );
     });
 
-    it('should clear completedAt when status changes away from DONE', async () => {
+    it('should use $unset (not $set: undefined) to clear completedAt when status changes away from DONE', async () => {
       const userId = 'user123';
       const taskId = 'task1';
       const mockTask = { _id: taskId, status: TaskStatus.DONE, completedAt: new Date(), user: userId };
-      const updated = { ...mockTask, status: TaskStatus.TODO, completedAt: undefined };
+      const updated = { _id: taskId, status: TaskStatus.TODO, user: userId };
 
       mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findByIdAndUpdate.mockResolvedValue(updated);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue(updated);
 
       const result = await service.update(taskId, userId, { status: TaskStatus.TODO });
-      expect(result.completedAt).toBeUndefined();
+
+      expect(mockTaskModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: taskId, user: userId },
+        expect.objectContaining({ $unset: { completedAt: '' } }),
+        { new: true },
+      );
+      // Confirm the $set half never carries an undefined completedAt key
+      const [, updateArg] = mockTaskModel.findOneAndUpdate.mock.calls[0];
+      expect(updateArg.$set).not.toHaveProperty('completedAt');
+      expect(result).not.toHaveProperty('completedAt');
     });
 
     it('should throw 404 if task not found', async () => {
@@ -236,6 +268,73 @@ describe('TasksService', () => {
       mockTaskModel.deleteOne.mockResolvedValue({ deletedCount: 0 });
 
       await expect(service.delete('task1', 'otherUser')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getStats', () => {
+    it('should compute stats from a single aggregation call', async () => {
+      const userId = '507f1f77bcf86cd799439011';
+      mockTaskModel.aggregate.mockResolvedValue([
+        {
+          total: [{ count: 5 }],
+          byStatus: [
+            { _id: TaskStatus.TODO, count: 2 },
+            { _id: TaskStatus.DONE, count: 3 },
+          ],
+          byPriority: [
+            { _id: Priority.HIGH, count: 1 },
+            { _id: Priority.MEDIUM, count: 4 },
+          ],
+          overdue: [{ count: 1 }],
+          completedThisWeek: [{ count: 2 }],
+          doneCount: [{ count: 3 }],
+        },
+      ]);
+
+      const result = await service.getStats(userId);
+
+      expect(mockTaskModel.aggregate).toHaveBeenCalledTimes(1);
+      expect(result.total).toBe(5);
+      expect(result.byStatus).toEqual({
+        BACKLOG: 0,
+        TODO: 2,
+        IN_PROGRESS: 0,
+        DONE: 3,
+      });
+      expect(result.byPriority).toEqual({
+        LOW: 0,
+        MEDIUM: 4,
+        HIGH: 1,
+        URGENT: 0,
+      });
+      expect(result.overdue).toBe(1);
+      expect(result.completedThisWeek).toBe(2);
+      expect(result.completionRate).toBe(0.6);
+    });
+
+    it('should return zeroed stats and a 0 completionRate when the user has no tasks', async () => {
+      const userId = '507f1f77bcf86cd799439011';
+      mockTaskModel.aggregate.mockResolvedValue([
+        {
+          total: [],
+          byStatus: [],
+          byPriority: [],
+          overdue: [],
+          completedThisWeek: [],
+          doneCount: [],
+        },
+      ]);
+
+      const result = await service.getStats(userId);
+
+      expect(result.total).toBe(0);
+      expect(result.completionRate).toBe(0);
+      expect(result.byStatus).toEqual({
+        BACKLOG: 0,
+        TODO: 0,
+        IN_PROGRESS: 0,
+        DONE: 0,
+      });
     });
   });
 });
