@@ -37,6 +37,9 @@ export const envSchema = z.object({
   EMAIL_FROM_ADDRESS: z
     .string()
     .min(1, 'EMAIL_FROM_ADDRESS is required'),
+  OPENWEATHER_API_KEY: z
+    .string()
+    .min(1, 'OPENWEATHER_API_KEY is required'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
