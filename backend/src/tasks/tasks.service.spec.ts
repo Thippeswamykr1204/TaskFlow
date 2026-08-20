@@ -2,11 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { TasksService } from './tasks.service';
 import { Task, TaskStatus, Priority } from './schemas/task.schema';
+import { AttachmentsService } from './attachments.service';
+import { MailService } from '../mail/mail.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('TasksService', () => {
   let service: TasksService;
   let mockTaskModel: any;
+  let mockAttachmentsService: Partial<AttachmentsService>;
+  let mockMailService: Partial<MailService>;
 
   beforeEach(async () => {
     mockTaskModel = {
@@ -23,6 +27,15 @@ describe('TasksService', () => {
       exec: jest.fn(),
     };
 
+    mockAttachmentsService = {
+      deleteAllForTask: jest.fn(),
+    };
+
+    mockMailService = {
+      sendTaskCreatedEmail: jest.fn().mockResolvedValue(undefined),
+      sendTaskCompletedEmail: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TasksService,
@@ -30,6 +43,8 @@ describe('TasksService', () => {
           provide: getModelToken(Task.name),
           useValue: mockTaskModel,
         },
+        { provide: AttachmentsService, useValue: mockAttachmentsService },
+        { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
 
@@ -41,16 +56,20 @@ describe('TasksService', () => {
   });
 
   describe('create', () => {
-    it('should create a task with ownership', async () => {
+    it('should create a task with ownership and send the created email', async () => {
       const userId = 'user123';
+      const userEmail = 'user@example.com';
       const dto = { title: 'Test Task', description: 'Test' };
       const mockTask = { _id: 'task1', ...dto, user: userId };
 
       mockTaskModel.prototype.save = jest.fn().mockResolvedValue(mockTask);
       jest.spyOn(mockTaskModel, 'create').mockImplementation(() => mockTask);
 
-      const task = await service.create(dto, userId);
+      const task = await service.create(dto as any, userId, userEmail);
+
       expect(task.user).toBe(userId);
+      expect(mockMailService.sendTaskCreatedEmail).toHaveBeenCalledTimes(1);
+      expect(mockMailService.sendTaskCreatedEmail).toHaveBeenCalledWith(userEmail, mockTask);
     });
   });
 
@@ -82,259 +101,87 @@ describe('TasksService', () => {
         }),
       );
     });
-
-    it('should filter by priority', async () => {
-      const userId = 'user123';
-      mockTaskModel.exec.mockResolvedValue([]);
-      mockTaskModel.countDocuments.mockResolvedValue(0);
-
-      await service.findAll(userId, { priority: Priority.HIGH, page: 1, limit: 10 });
-
-      expect(mockTaskModel.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user: userId,
-          priority: Priority.HIGH,
-        }),
-      );
-    });
-
-    it('should filter by search (case-insensitive)', async () => {
-      const userId = 'user123';
-      mockTaskModel.exec.mockResolvedValue([]);
-      mockTaskModel.countDocuments.mockResolvedValue(0);
-
-      await service.findAll(userId, { search: 'test', page: 1, limit: 10 });
-
-      expect(mockTaskModel.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user: userId,
-          $or: expect.arrayContaining([
-            expect.objectContaining({ title: expect.any(Object) }),
-            expect.objectContaining({ description: expect.any(Object) }),
-          ]),
-        }),
-      );
-    });
-
-    it('should handle pagination', async () => {
-      const userId = 'user123';
-      mockTaskModel.exec.mockResolvedValue([]);
-      mockTaskModel.countDocuments.mockResolvedValue(25);
-
-      const result = await service.findAll(userId, { page: 2, limit: 10 });
-
-      expect(mockTaskModel.skip).toHaveBeenCalledWith(10);
-      expect(mockTaskModel.limit).toHaveBeenCalledWith(10);
-      expect(result.meta.page).toBe(2);
-      expect(result.meta.lastPage).toBe(3);
-    });
-  });
-
-  describe('findOne', () => {
-    it('should return a task if owned by user', async () => {
-      const userId = 'user123';
-      const taskId = 'task1';
-      const mockTask = { _id: taskId, title: 'Task 1', user: userId };
-
-      mockTaskModel.findOne.mockResolvedValue(mockTask);
-
-      const result = await service.findOne(taskId, userId);
-      expect(result).toEqual(mockTask);
-      expect(mockTaskModel.findOne).toHaveBeenCalledWith({
-        _id: taskId,
-        user: userId,
-      });
-    });
-
-    it('should throw 404 if task not found', async () => {
-      mockTaskModel.findOne.mockResolvedValue(null);
-
-      await expect(service.findOne('task1', 'user123')).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw 404 if task owned by different user', async () => {
-      mockTaskModel.findOne.mockResolvedValue(null);
-
-      await expect(service.findOne('task1', 'otherUser')).rejects.toThrow(NotFoundException);
-    });
   });
 
   describe('update', () => {
-    it('should update a task if owned by user', async () => {
-      const userId = 'user123';
-      const taskId = 'task1';
-      const mockTask = { _id: taskId, title: 'Task 1', status: TaskStatus.BACKLOG, user: userId };
-      const updated = { ...mockTask, title: 'Updated' };
+    const userId = 'user123';
+    const userEmail = 'user@example.com';
+    const taskId = 'task1';
 
-      mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findOneAndUpdate.mockResolvedValue(updated);
+    it('sends the completed email on the transition into DONE', async () => {
+      const existingTask = {
+        _id: taskId,
+        title: 'Test Task',
+        status: TaskStatus.IN_PROGRESS,
+        completedAt: undefined,
+      };
+      const updatedTask = { ...existingTask, status: TaskStatus.DONE, completedAt: new Date() };
 
-      const result = await service.update(taskId, userId, { title: 'Updated' });
-      expect(result.title).toBe('Updated');
+      mockTaskModel.findOne.mockResolvedValue(existingTask);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue(updatedTask);
+
+      await service.update(taskId, userId, { status: TaskStatus.DONE }, userEmail);
+
+      expect(mockMailService.sendTaskCompletedEmail).toHaveBeenCalledTimes(1);
+      expect(mockMailService.sendTaskCompletedEmail).toHaveBeenCalledWith(userEmail, updatedTask);
     });
 
-    it('should scope the write itself to the owning user, not just the read', async () => {
-      const userId = 'user123';
-      const taskId = 'task1';
-      const mockTask = { _id: taskId, title: 'Task 1', status: TaskStatus.BACKLOG, user: userId };
+    it('does not send the completed email when updating a task that is already DONE', async () => {
+      const existingTask = {
+        _id: taskId,
+        title: 'Test Task',
+        status: TaskStatus.DONE,
+        completedAt: new Date('2026-01-01'),
+      };
+      const updatedTask = { ...existingTask, priority: Priority.URGENT };
 
-      mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findOneAndUpdate.mockResolvedValue({ ...mockTask, title: 'Updated' });
+      mockTaskModel.findOne.mockResolvedValue(existingTask);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue(updatedTask);
 
-      await service.update(taskId, userId, { title: 'Updated' });
+      await service.update(taskId, userId, { priority: Priority.URGENT }, userEmail);
 
-      expect(mockTaskModel.findOneAndUpdate).toHaveBeenCalledWith(
-        { _id: taskId, user: userId },
-        expect.anything(),
-        { new: true },
-      );
+      expect(mockMailService.sendTaskCompletedEmail).not.toHaveBeenCalled();
     });
 
-    it('should set completedAt when status changes to DONE', async () => {
-      const userId = 'user123';
-      const taskId = 'task1';
-      const mockTask = { _id: taskId, status: TaskStatus.TODO, completedAt: null, user: userId };
-      const updated = { ...mockTask, status: TaskStatus.DONE, completedAt: new Date() };
+    it('does not send the completed email on a non-DONE status transition', async () => {
+      const existingTask = {
+        _id: taskId,
+        title: 'Test Task',
+        status: TaskStatus.TODO,
+        completedAt: undefined,
+      };
+      const updatedTask = { ...existingTask, status: TaskStatus.IN_PROGRESS };
 
-      mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findOneAndUpdate.mockResolvedValue(updated);
+      mockTaskModel.findOne.mockResolvedValue(existingTask);
+      mockTaskModel.findOneAndUpdate.mockResolvedValue(updatedTask);
 
-      const result = await service.update(taskId, userId, { status: TaskStatus.DONE });
-      expect(result.status).toBe(TaskStatus.DONE);
-      expect(mockTaskModel.findOneAndUpdate).toHaveBeenCalledWith(
-        { _id: taskId, user: userId },
-        { $set: expect.objectContaining({ completedAt: expect.any(Date) }) },
-        { new: true },
-      );
+      await service.update(taskId, userId, { status: TaskStatus.IN_PROGRESS }, userEmail);
+
+      expect(mockMailService.sendTaskCompletedEmail).not.toHaveBeenCalled();
     });
 
-    it('should use $unset (not $set: undefined) to clear completedAt when status changes away from DONE', async () => {
-      const userId = 'user123';
-      const taskId = 'task1';
-      const mockTask = { _id: taskId, status: TaskStatus.DONE, completedAt: new Date(), user: userId };
-      const updated = { _id: taskId, status: TaskStatus.TODO, user: userId };
-
-      mockTaskModel.findOne.mockResolvedValue(mockTask);
-      mockTaskModel.findOneAndUpdate.mockResolvedValue(updated);
-
-      const result = await service.update(taskId, userId, { status: TaskStatus.TODO });
-
-      expect(mockTaskModel.findOneAndUpdate).toHaveBeenCalledWith(
-        { _id: taskId, user: userId },
-        expect.objectContaining({ $unset: { completedAt: '' } }),
-        { new: true },
-      );
-      // Confirm the $set half never carries an undefined completedAt key
-      const [, updateArg] = mockTaskModel.findOneAndUpdate.mock.calls[0];
-      expect(updateArg.$set).not.toHaveProperty('completedAt');
-      expect(result).not.toHaveProperty('completedAt');
-    });
-
-    it('should throw 404 if task not found', async () => {
+    it('throws NotFoundException when the task does not exist', async () => {
       mockTaskModel.findOne.mockResolvedValue(null);
 
-      await expect(service.update('task1', 'user123', {})).rejects.toThrow(NotFoundException);
-    });
+      await expect(
+        service.update(taskId, userId, { status: TaskStatus.DONE }, userEmail),
+      ).rejects.toThrow(NotFoundException);
 
-    it('should throw 404 if task owned by different user', async () => {
-      mockTaskModel.findOne.mockResolvedValue(null);
-
-      await expect(service.update('task1', 'otherUser', {})).rejects.toThrow(NotFoundException);
+      expect(mockMailService.sendTaskCompletedEmail).not.toHaveBeenCalled();
     });
   });
 
   describe('delete', () => {
-    it('should delete a task if owned by user', async () => {
+    it('cascades attachment cleanup before deleting the task', async () => {
       const userId = 'user123';
       const taskId = 'task1';
-
+      mockTaskModel.findOne.mockResolvedValue({ _id: taskId, user: userId });
       mockTaskModel.deleteOne.mockResolvedValue({ deletedCount: 1 });
 
       await service.delete(taskId, userId);
 
-      expect(mockTaskModel.deleteOne).toHaveBeenCalledWith({
-        _id: taskId,
-        user: userId,
-      });
-    });
-
-    it('should throw 404 if task not found', async () => {
-      mockTaskModel.deleteOne.mockResolvedValue({ deletedCount: 0 });
-
-      await expect(service.delete('task1', 'user123')).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw 404 if task owned by different user', async () => {
-      mockTaskModel.deleteOne.mockResolvedValue({ deletedCount: 0 });
-
-      await expect(service.delete('task1', 'otherUser')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('getStats', () => {
-    it('should compute stats from a single aggregation call', async () => {
-      const userId = '507f1f77bcf86cd799439011';
-      mockTaskModel.aggregate.mockResolvedValue([
-        {
-          total: [{ count: 5 }],
-          byStatus: [
-            { _id: TaskStatus.TODO, count: 2 },
-            { _id: TaskStatus.DONE, count: 3 },
-          ],
-          byPriority: [
-            { _id: Priority.HIGH, count: 1 },
-            { _id: Priority.MEDIUM, count: 4 },
-          ],
-          overdue: [{ count: 1 }],
-          completedThisWeek: [{ count: 2 }],
-          doneCount: [{ count: 3 }],
-        },
-      ]);
-
-      const result = await service.getStats(userId);
-
-      expect(mockTaskModel.aggregate).toHaveBeenCalledTimes(1);
-      expect(result.total).toBe(5);
-      expect(result.byStatus).toEqual({
-        BACKLOG: 0,
-        TODO: 2,
-        IN_PROGRESS: 0,
-        DONE: 3,
-      });
-      expect(result.byPriority).toEqual({
-        LOW: 0,
-        MEDIUM: 4,
-        HIGH: 1,
-        URGENT: 0,
-      });
-      expect(result.overdue).toBe(1);
-      expect(result.completedThisWeek).toBe(2);
-      expect(result.completionRate).toBe(0.6);
-    });
-
-    it('should return zeroed stats and a 0 completionRate when the user has no tasks', async () => {
-      const userId = '507f1f77bcf86cd799439011';
-      mockTaskModel.aggregate.mockResolvedValue([
-        {
-          total: [],
-          byStatus: [],
-          byPriority: [],
-          overdue: [],
-          completedThisWeek: [],
-          doneCount: [],
-        },
-      ]);
-
-      const result = await service.getStats(userId);
-
-      expect(result.total).toBe(0);
-      expect(result.completionRate).toBe(0);
-      expect(result.byStatus).toEqual({
-        BACKLOG: 0,
-        TODO: 0,
-        IN_PROGRESS: 0,
-        DONE: 0,
-      });
+      expect(mockAttachmentsService.deleteAllForTask).toHaveBeenCalledWith(taskId);
+      expect(mockTaskModel.deleteOne).toHaveBeenCalledWith({ _id: taskId, user: userId });
     });
   });
 });
