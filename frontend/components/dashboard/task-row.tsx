@@ -1,5 +1,10 @@
+"use client";
+
 import { MoreHorizontal } from "lucide-react";
+import { motion } from "framer-motion";
 import { Checkbox } from "@/components/ui/checkbox";
+import { WeatherChip } from "@/components/weather-chip";
+import { useTilt } from "@/lib/hooks/use-tilt";
 import type { Task } from "@/types/task";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +37,22 @@ const statusLabel: Record<Task["status"], string> = {
 };
 
 export function TaskRow({ task }: { task: Task }) {
+  const { ref, rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
+
   return (
-    <div className="flex items-center gap-4 border-b border-border px-1 py-4 last:border-b-0">
+    <motion.div
+      ref={ref}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      style={{ rotateX, rotateY, transformPerspective: 800 }}
+      className="flex items-center gap-4 border-b border-border px-1 py-4 last:border-b-0"
+    >
       <Checkbox disabled />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
         {task.tags[0] && <p className="text-xs text-muted-foreground">{task.tags[0]}</p>}
       </div>
+      {task.location?.city && <WeatherChip city={task.location.city} variant="pill" />}
       <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-foreground">
         <span className={cn("h-1.5 w-1.5 rounded-full", priorityDot[task.priority])} />
         {priorityLabel[task.priority]}
@@ -54,7 +68,7 @@ export function TaskRow({ task }: { task: Task }) {
       <button className="text-muted-foreground transition-colors hover:text-foreground" disabled aria-label="More options">
         <MoreHorizontal className="h-4 w-4" />
       </button>
-    </div>
+    </motion.div>
   );
 }
 

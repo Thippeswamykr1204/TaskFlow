@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorBanner } from "@/components/auth/error-banner";
+import { WeatherChip } from "@/components/weather-chip";
+import { TaskAttachments } from "@/components/tasks/task-attachments";
 import { useUiStore } from "@/lib/store/ui-store";
 import { useCreateTask, useUpdateTask, useDeleteTask, useTasks } from "@/lib/hooks/use-tasks";
 import { taskFormSchema, taskStatusValues, priorityValues, type TaskFormValues } from "@/lib/validation/task-schemas";
@@ -57,7 +59,7 @@ function toFormValues(task?: Task): TaskFormValues {
     dueDate: task.dueDate ? task.dueDate.slice(0, 10) : "",
     city: task.location?.city ?? "",
     tags: task.tags,
-    subtasks: task.subtasks.map((s) => ({ title: s.title, done: s.done })),
+    subtasks: task.subtasks.map((s) => ({ _id: s._id, title: s.title, done: s.done })),
   };
 }
 
@@ -123,6 +125,7 @@ export function TaskFormModal() {
   const description = watch("description") ?? "";
   const tags = watch("tags");
   const subtasks = watch("subtasks");
+  const city = watch("city");
 
   const onSubmit = async (values: TaskFormValues) => {
     setApiError(null);
@@ -251,6 +254,11 @@ export function TaskFormModal() {
             <Label htmlFor="city">City</Label>
             <Input id="city" placeholder="San Francisco" {...register("city")} />
             <p className="text-xs text-muted-foreground">Used to show local weather.</p>
+            {city && (
+              <div className="pt-1">
+                <WeatherChip city={city} variant="field" />
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -282,7 +290,7 @@ export function TaskFormModal() {
             <Label>Subtasks</Label>
             <div className="space-y-2">
               {subtasks.map((s, i) => (
-                <div key={i} className="flex items-center gap-2">
+                <div key={s._id ?? i} className="flex items-center gap-2">
                   <Checkbox checked={s.done} onCheckedChange={() => toggleSubtask(i)} />
                   <span className={s.done ? "flex-1 text-sm text-muted-foreground line-through" : "flex-1 text-sm"}>
                     {s.title}
@@ -314,6 +322,8 @@ export function TaskFormModal() {
               </Button>
             </div>
           </div>
+
+          {isEdit && editingTaskId && <TaskAttachments taskId={editingTaskId} />}
 
           <div className="flex items-center justify-between pt-2">
             {isEdit ? (
