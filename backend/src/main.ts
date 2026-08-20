@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { EnvConfig } from './config/env.validation';
@@ -12,6 +13,7 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService<EnvConfig, true>);
 
   app.use(helmet());
+  app.use(cookieParser());
 
   app.enableCors({
     origin: config.get('CORS_ORIGIN', { infer: true }),
@@ -30,8 +32,8 @@ async function bootstrap(): Promise<void> {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('TaskFlow API')
-    .setDescription('TaskFlow backend — scaffolding tier (Tier 0)')
-    .setVersion('0.1.0')
+    .setDescription('TaskFlow backend — auth module (Tier 1)')
+    .setVersion('1.0.0')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
