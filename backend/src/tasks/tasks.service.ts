@@ -308,6 +308,11 @@ export class TasksService {
     // task delete.
     await this.attachmentsService.deleteAllForTask(id);
 
+    // Cascade-clean activity log entries too — same reasoning as attachments
+    // above: without this they're orphaned in the DB forever once the task
+    // is gone.
+    await this.activityService.deleteAllForTask(id);
+
     await this.taskModel.deleteOne({
       _id: id,
       user: userId,

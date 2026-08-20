@@ -37,6 +37,21 @@ export class ActivityService {
     }
   }
 
+  // Cascade cleanup: called from TasksService.delete() so activity entries
+  // don't outlive the task they belong to. Same best-effort spirit as
+  // record() — a logging failure shouldn't be able to block a task delete,
+  // but a cleanup failure here is arguably worse to swallow silently, so we
+  // still log it loudly via the existing logger rather than throwing.
+  async deleteAllForTask(taskId: string): Promise<void> {
+    try {
+      await this.activityModel.deleteMany({ task: taskId });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to delete activity log entries for task ${taskId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   async findForTask(
     taskId: string,
     page = 1,
