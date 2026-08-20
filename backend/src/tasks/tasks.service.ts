@@ -9,6 +9,7 @@ import { Task, TaskStatus, Priority } from './schemas/task.schema';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
+import { AttachmentsService } from './attachments.service';
 
 interface TasksResponse {
   success: boolean;
@@ -31,7 +32,10 @@ interface TaskStats {
 
 @Injectable()
 export class TasksService {
-  constructor(@InjectModel(Task.name) private taskModel: Model<Task>) {}
+  constructor(
+    @InjectModel(Task.name) private taskModel: Model<Task>,
+    private attachmentsService: AttachmentsService,
+  ) {}
 
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
     const taskData: any = {
@@ -186,17 +190,28 @@ export class TasksService {
   }
 
   async delete(id: string, userId: string): Promise<void> {
-    const result = await this.taskModel.deleteOne({
+    const task = await this.taskModel.findOne({
       _id: id,
       user: userId,
     });
 
-    if (result.deletedCount === 0) {
+    if (!task) {
       throw new NotFoundException({
         error: 'TASK_NOT_FOUND',
         message: 'Task not found',
       });
     }
+
+    // Cascade-clean attachments (Cloudinary assets + DB records) before
+    // removing the task itself. Per-attachment failures are logged inside
+    // AttachmentsService rather than thrown, so this never blocks the
+    // task delete.
+    await this.attachmentsService.deleteAllForTask(id);
+
+    await this.taskModel.deleteOne({
+      _id: id,
+      user: userId,
+    });
   }
 
   async getStats(userId: string): Promise<TaskStats> {
@@ -275,4 +290,4 @@ export class TasksService {
       completionRate,
     };
   }
-} 
+}
