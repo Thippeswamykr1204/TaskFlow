@@ -1,6 +1,12 @@
+"use client";
+
 import type { LucideIcon } from "lucide-react";
+import { motion } from "framer-motion";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { useTilt } from "@/lib/hooks/use-tilt";
 import { cn } from "@/lib/utils";
+
+const MotionCard = motion(Card);
 
 export function StatCard({
   icon: Icon,
@@ -13,6 +19,8 @@ export function StatCard({
   value: string;
   tone?: "primary" | "teal" | "danger";
 }) {
+  const { ref, rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
+
   const toneClasses = {
     primary: "bg-primary/10 text-primary",
     teal: "bg-secondary-accent/10 text-secondary-accent",
@@ -20,7 +28,12 @@ export function StatCard({
   }[tone];
 
   return (
-    <Card>
+    <MotionCard
+      ref={ref}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      style={{ rotateX, rotateY, transformPerspective: 800 }}
+    >
       <CardHeader className="flex-row items-center gap-3 pb-0">
         <span className={cn("flex h-9 w-9 items-center justify-center rounded-md", toneClasses)}>
           <Icon className="h-4 w-4" />
@@ -30,7 +43,7 @@ export function StatCard({
       <CardContent>
         <p className="font-heading text-3xl font-bold text-foreground">{value}</p>
       </CardContent>
-    </Card>
+    </MotionCard>
   );
 }
 
