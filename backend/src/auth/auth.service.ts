@@ -54,12 +54,13 @@ export class AuthService {
       refreshToken,
       '',
       '',
-      this.config.get('JWT_REFRESH_SECRET', { infer: true }).length * 10,
+      7 * 24 * 60 * 60 * 1000,
     );
 
     return {
       user: this.sanitizeUser(user),
       accessToken,
+      refreshToken,
     };
   }
 
@@ -95,12 +96,13 @@ export class AuthService {
       refreshToken,
       userAgent,
       ip,
-      this.config.get('JWT_REFRESH_SECRET', { infer: true }).length * 10,
+      7 * 24 * 60 * 60 * 1000,
     );
 
     return {
       user: this.sanitizeUser(user),
       accessToken,
+      refreshToken,
     };
   }
 
@@ -156,12 +158,13 @@ export class AuthService {
       newRefreshToken,
       userAgent,
       ip,
-      30 * 24 * 60 * 60 * 1000,
+      7 * 24 * 60 * 60 * 1000,
     );
 
     return {
       user: this.sanitizeUser(user),
       accessToken,
+      refreshToken: newRefreshToken,
     };
   }
 
