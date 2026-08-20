@@ -53,6 +53,14 @@ export class TasksController {
     return this.tasksService.findAll(req.user.id, query);
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Get aggregated task statistics for the current user' })
+  @ApiResponse({ status: 200, description: 'Task statistics' })
+  async stats(@Req() req: AuthRequest) {
+    const data = await this.tasksService.getStats(req.user.id);
+    return { success: true, data };
+  }
+
   @Post()
   @HttpCode(201)
   @ApiOperation({ summary: 'Create a new task' })
