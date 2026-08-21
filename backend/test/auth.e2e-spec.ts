@@ -30,6 +30,13 @@ describe('Auth (e2e)', () => {
               JWT_ACCESS_SECRET: 'test_access_secret_long_enough_123',
               JWT_REFRESH_SECRET: 'test_refresh_secret_long_enough_456',
               CORS_ORIGIN: 'http://localhost:3001',
+              CLOUDINARY_CLOUD_NAME: 'test-cloud',
+              CLOUDINARY_API_KEY: 'test-key',
+              CLOUDINARY_API_SECRET: 'test-secret',
+              MAX_ATTACHMENT_SIZE_MB: 1,
+              RESEND_API_KEY: 'test-resend-key',
+              EMAIL_FROM_ADDRESS: 'test@example.com',
+              OPENWEATHER_API_KEY: 'test-weather-key',
             }),
           ],
         }),
@@ -230,6 +237,77 @@ describe('Auth (e2e)', () => {
     it('should reject refresh without token', () => {
       return request(app.getHttpServer())
         .post('/auth/refresh')
+        .expect(401);
+    });
+
+    it('should allow token rotation: login → refresh → refresh again', async () => {
+      // Register and login to get initial refresh token
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          email: 'login@example.com',
+          password: 'SecurePass123!',
+        });
+
+      const initialRefreshToken = loginRes.headers['set-cookie']
+        ?.find((c: string) => c.startsWith('refreshToken='))
+        ?.split(';')[0]
+        ?.split('=')[1];
+
+      expect(initialRefreshToken).toBeDefined();
+
+      // First refresh with initial token
+      const firstRefreshRes = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', [`refreshToken=${initialRefreshToken}`])
+        .expect(200);
+
+      expect(firstRefreshRes.body.accessToken).toBeDefined();
+
+      const secondRefreshToken = firstRefreshRes.headers['set-cookie']
+        ?.find((c: string) => c.startsWith('refreshToken='))
+        ?.split(';')[0]
+        ?.split('=')[1];
+
+      expect(secondRefreshToken).toBeDefined();
+      expect(secondRefreshToken).not.toBe(initialRefreshToken);
+
+      // Second refresh with rotated token - this was the broken part before the fix
+      const secondRefreshRes = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', [`refreshToken=${secondRefreshToken}`])
+        .expect(200);
+
+      expect(secondRefreshRes.body.accessToken).toBeDefined();
+      expect(secondRefreshRes.body.user).toBeDefined();
+    });
+
+    it('should reject a reused/rotated-out refresh token', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          email: 'login@example.com',
+          password: 'SecurePass123!',
+        });
+
+      const originalToken = loginRes.headers['set-cookie']
+        ?.find((c: string) => c.startsWith('refreshToken='))
+        ?.split(';')[0]
+        ?.split('=')[1];
+
+      expect(originalToken).toBeDefined();
+
+      // Rotate once — this revokes the session backing `originalToken`.
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', [`refreshToken=${originalToken}`])
+        .expect(200);
+
+      // Reusing the now-rotated-out token must be rejected, even though the
+      // JWT itself is still cryptographically valid and unexpired.
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', [`refreshToken=${originalToken}`])
         .expect(401);
     });
   });

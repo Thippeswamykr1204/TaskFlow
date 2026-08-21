@@ -21,6 +21,7 @@
   --priority-low: #2dd4bf;
   --priority-medium: #b45309;
   --priority-high: #dc2626;
+  --priority-urgent: #dc2626;
 
   --status-in-progress-bg: #ccfbf1;
   --status-in-progress-fg: #0f766e;
@@ -28,6 +29,16 @@
   --status-pending-fg: #b45309;
   --status-todo-bg: #f3f4f6;
   --status-todo-fg: #374151;
+  --status-done-bg: #dcfce7;
+  --status-done-fg: #15803d;
+  --status-backlog-bg: #ede9fe;
+  --status-backlog-fg: #6d28d9;
+
+  /* Kanban column accent borders */
+  --kanban-backlog: #7c3aed;
+  --kanban-todo: #374151;
+  --kanban-in-progress: #0f766e;
+  --kanban-done: #15803d;
 
   --radius: 0.75rem;
 }
@@ -53,6 +64,11 @@
   --color-priority-low: var(--priority-low);
   --color-priority-medium: var(--priority-medium);
   --color-priority-high: var(--priority-high);
+
+  --color-status-done-bg: var(--status-done-bg);
+  --color-status-done-fg: var(--status-done-fg);
+  --color-status-backlog-bg: var(--status-backlog-bg);
+  --color-status-backlog-fg: var(--status-backlog-fg);
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 4px);
@@ -82,11 +98,34 @@ body {
     0 1px 2px 0 rgba(17, 24, 39, 0.03),
     0 16px 32px -12px rgba(79, 70, 229, 0.08);
 }
+
+/* ─── Micro-interaction helper ───────────────────────────────────── */
+.interactive {
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+.interactive:hover {
+  box-shadow:
+    0 4px 12px -2px rgba(79, 70, 229, 0.12),
+    0 2px 4px -1px rgba(17, 24, 39, 0.06);
+}
+.interactive:active {
+  transform: scale(0.98);
+}
+
+/* ─── Focus ring utility ─────────────────────────────────────────── */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
 @theme {
   --animate-overlay-in: overlay-in 150ms ease-out;
   --animate-overlay-out: overlay-out 150ms ease-in forwards;
   --animate-content-in: content-in 150ms ease-out;
   --animate-content-out: content-out 150ms ease-in forwards;
+  --animate-fade-up: fade-up 300ms ease-out both;
+  --animate-count-up: count-up 600ms ease-out both;
 
   @keyframes overlay-in {
     from { opacity: 0; }
@@ -103,5 +142,13 @@ body {
   @keyframes content-out {
     from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     to { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes count-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 }

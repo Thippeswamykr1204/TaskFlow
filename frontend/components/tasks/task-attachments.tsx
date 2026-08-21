@@ -128,7 +128,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
                 className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
               >
                 <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                
+                <a
                   href={attachment.url}
                   target="_blank"
                   rel="noopener noreferrer"

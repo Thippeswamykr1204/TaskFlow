@@ -56,6 +56,25 @@ export async function fetchTasks(params: TaskListParams): Promise<TaskListResult
   return { data: res.data.data, meta: res.data.meta };
 }
 
+// The tasks endpoint intentionally limits one response to 50 records. The
+// Kanban board needs a complete view, so it retrieves every server page rather
+// than sending an invalid oversized `limit` value.
+export async function fetchAllTasks(): Promise<Task[]> {
+  const firstPage = await fetchTasks({ page: 1, limit: 50 });
+
+  if (firstPage.meta.lastPage <= 1) {
+    return firstPage.data;
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.meta.lastPage - 1 }, (_, index) =>
+      fetchTasks({ page: index + 2, limit: 50 }),
+    ),
+  );
+
+  return [firstPage, ...remainingPages].flatMap((page) => page.data);
+}
+
 export async function createTask(input: CreateTaskInput) {
   const res = await api.post<{ success: boolean; data: Task }>("/tasks", input);
   return res.data.data;

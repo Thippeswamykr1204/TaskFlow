@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { X, Plus, SlidersHorizontal } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,10 @@ import { TaskFormModal } from "@/components/tasks/task-form-modal";
 import { useUiStore, type TaskFilters } from "@/lib/store/ui-store";
 import { useTasks } from "@/lib/hooks/use-tasks";
 import { taskStatusValues, priorityValues } from "@/lib/validation/task-schemas";
+import { cn } from "@/lib/utils";
 
 const statusLabel: Record<TaskFilters["status"], string> = {
-  ALL: "All",
+  ALL: "All statuses",
   BACKLOG: "Backlog",
   TODO: "To Do",
   IN_PROGRESS: "In Progress",
@@ -21,7 +22,7 @@ const statusLabel: Record<TaskFilters["status"], string> = {
 };
 
 const priorityLabel: Record<TaskFilters["priority"], string> = {
-  ALL: "All",
+  ALL: "All priorities",
   LOW: "Low",
   MEDIUM: "Medium",
   HIGH: "High",
@@ -35,6 +36,32 @@ function useDebounced<T>(value: T, delayMs: number) {
     return () => clearTimeout(id);
   }, [value, delayMs]);
   return debounced;
+}
+
+// ─── Styled select wrapper ────────────────────────────────────────────────────
+function StyledSelect({ value, onChange, children, "aria-label": ariaLabel }: {
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+  "aria-label"?: string;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        className="h-10 appearance-none rounded-lg border border-border bg-background pl-3 pr-8 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary cursor-pointer hover:border-primary/40"
+      >
+        {children}
+      </select>
+      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      </span>
+    </div>
+  );
 }
 
 export default function TasksPage() {
@@ -78,73 +105,88 @@ export default function TasksPage() {
   const noTasksMatchFilters = query.isSuccess && tasks.length === 0 && hasActiveFilters;
 
   return (
-    <div>
+    <div className="max-w-[1100px] animate-fade-up">
+      {/* Page header */}
       <div className="flex items-center justify-between">
-        <h1 className="font-heading text-2xl font-bold text-foreground">My Tasks</h1>
-        <Button onClick={openCreateTaskModal}>New Task</Button>
+        <div>
+          <h1 className="font-heading text-3xl font-bold text-foreground">My Tasks</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {meta?.total != null ? `${meta.total} task${meta.total !== 1 ? "s" : ""} total` : "Manage your work"}
+          </p>
+        </div>
+        <Button onClick={openCreateTaskModal} className="interactive gap-2">
+          <Plus className="h-4 w-4" />
+          New Task
+        </Button>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px] flex-1 space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Search</label>
-          <Input
-            placeholder="Search tasks…"
-            value={searchDraft}
-            onChange={(e) => setSearchDraft(e.target.value)}
-          />
-        </div>
+      {/* Filter bar */}
+      <div className="mt-6 rounded-xl border border-border bg-background-secondary/60 px-4 py-3.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Status</label>
-          <select
+          {/* Search */}
+          <div className="min-w-[200px] flex-1">
+            <Input
+              placeholder="Search tasks…"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              className="h-10 rounded-lg bg-background"
+            />
+          </div>
+
+          {/* Status */}
+          <StyledSelect
+            aria-label="Filter by status"
             value={filters.status}
-            onChange={(e) => setTaskFilter("status", e.target.value as TaskFilters["status"])}
-            className="flex h-11 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            onChange={(v) => setTaskFilter("status", v as TaskFilters["status"])}
           >
-            <option value="ALL">All</option>
+            <option value="ALL">All statuses</option>
             {taskStatusValues.map((s) => (
-              <option key={s} value={s}>
-                {statusLabel[s]}
-              </option>
+              <option key={s} value={s}>{statusLabel[s]}</option>
             ))}
-          </select>
-        </div>
+          </StyledSelect>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Priority</label>
-          <select
+          {/* Priority */}
+          <StyledSelect
+            aria-label="Filter by priority"
             value={filters.priority}
-            onChange={(e) => setTaskFilter("priority", e.target.value as TaskFilters["priority"])}
-            className="flex h-11 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            onChange={(v) => setTaskFilter("priority", v as TaskFilters["priority"])}
           >
-            <option value="ALL">All</option>
+            <option value="ALL">All priorities</option>
             {priorityValues.map((p) => (
-              <option key={p} value={p}>
-                {priorityLabel[p]}
-              </option>
+              <option key={p} value={p}>{priorityLabel[p]}</option>
             ))}
-          </select>
-        </div>
+          </StyledSelect>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Due from</label>
-          <Input type="date" value={filters.startDate} onChange={(e) => setTaskFilter("startDate", e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Due to</label>
-          <Input type="date" value={filters.endDate} onChange={(e) => setTaskFilter("endDate", e.target.value)} />
-        </div>
+          {/* Date range */}
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setTaskFilter("startDate", e.target.value)}
+              aria-label="Due from"
+              className="h-10 w-36 rounded-lg text-sm"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setTaskFilter("endDate", e.target.value)}
+              aria-label="Due to"
+              className="h-10 w-36 rounded-lg text-sm"
+            />
+          </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Sort by</label>
-          <select
+          {/* Sort */}
+          <StyledSelect
+            aria-label="Sort tasks"
             value={`${filters.sortBy}:${filters.sortOrder}`}
-            onChange={(e) => {
-              const [sortBy, sortOrder] = e.target.value.split(":") as [TaskFilters["sortBy"], TaskFilters["sortOrder"]];
+            onChange={(v) => {
+              const [sortBy, sortOrder] = v.split(":") as [TaskFilters["sortBy"], TaskFilters["sortOrder"]];
               setTaskFilter("sortBy", sortBy);
               setTaskFilter("sortOrder", sortOrder);
             }}
-            className="flex h-11 rounded-md border border-border bg-background px-3 text-sm text-foreground"
           >
             <option value="dueDate:asc">Due date ↑</option>
             <option value="dueDate:desc">Due date ↓</option>
@@ -152,46 +194,66 @@ export default function TasksPage() {
             <option value="priority:desc">Priority ↓</option>
             <option value="createdAt:asc">Created ↑</option>
             <option value="createdAt:desc">Created ↓</option>
-          </select>
+          </StyledSelect>
         </div>
       </div>
 
+      {/* Active filter chips */}
       {hasActiveFilters && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Filters:</span>
           {filters.search && (
-            <FilterChip label={`Search: ${filters.search}`} onClear={() => { setSearchDraft(""); clearTaskFilter("search"); }} />
+            <FilterChip label={`"${filters.search}"`} onClear={() => { setSearchDraft(""); clearTaskFilter("search"); }} />
           )}
           {filters.status !== "ALL" && (
-            <FilterChip label={`Status: ${statusLabel[filters.status]}`} onClear={() => clearTaskFilter("status")} />
+            <FilterChip label={statusLabel[filters.status]} onClear={() => clearTaskFilter("status")} />
           )}
           {filters.priority !== "ALL" && (
-            <FilterChip label={`Priority: ${priorityLabel[filters.priority]}`} onClear={() => clearTaskFilter("priority")} />
+            <FilterChip label={priorityLabel[filters.priority]} onClear={() => clearTaskFilter("priority")} />
           )}
           {filters.startDate && (
-            <FilterChip label={`From: ${filters.startDate}`} onClear={() => clearTaskFilter("startDate")} />
+            <FilterChip label={`From ${filters.startDate}`} onClear={() => clearTaskFilter("startDate")} />
           )}
           {filters.endDate && (
-            <FilterChip label={`To: ${filters.endDate}`} onClear={() => clearTaskFilter("endDate")} />
+            <FilterChip label={`To ${filters.endDate}`} onClear={() => clearTaskFilter("endDate")} />
           )}
+          <button
+            onClick={clearAllTaskFilters}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+          >
+            Clear all
+          </button>
         </div>
       )}
 
-      <div className="card-surface mt-6 px-5">
+      {/* Task list */}
+      <div className="card-surface mt-5 px-5">
         {query.isLoading && Array.from({ length: 6 }).map((_, i) => <TaskRowSkeleton key={i} />)}
-
         {query.isError && <TaskListError onRetry={() => query.refetch()} />}
 
         {noTasksAtAll && (
-          <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-            <p className="text-sm text-muted-foreground">No tasks yet. Create your first one to get started.</p>
-            <Button size="sm" onClick={openCreateTaskModal}>New Task</Button>
+          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/8">
+              <Plus className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <p className="font-heading text-base font-semibold text-foreground">No tasks yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">Create your first task to get started.</p>
+            </div>
+            <Button size="sm" onClick={openCreateTaskModal}>Create first task</Button>
           </div>
         )}
 
         {noTasksMatchFilters && (
-          <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-            <p className="text-sm text-muted-foreground">No tasks match your filters.</p>
-            <Button size="sm" variant="outline" onClick={clearAllTaskFilters}>Clear filters</Button>
+          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-background-secondary">
+              <SlidersHorizontal className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-heading text-base font-semibold text-foreground">No tasks match</p>
+              <p className="mt-1 text-sm text-muted-foreground">Try adjusting or clearing your filters.</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={clearAllTaskFilters}>Clear all filters</Button>
           </div>
         )}
 
@@ -205,7 +267,7 @@ export default function TasksPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
                   onClick={() => openEditTaskModal(task._id)}
                   className="cursor-pointer"
                 >
@@ -217,16 +279,17 @@ export default function TasksPage() {
         )}
       </div>
 
+      {/* Pagination */}
       {meta && meta.lastPage > 1 && (
-        <div className="mt-4 flex items-center justify-center gap-4">
+        <div className="mt-4 flex items-center justify-center gap-3">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setTaskPage(page - 1)}>
-            Prev
+            ← Prev
           </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {meta.page} of {meta.lastPage}
+          <span className="rounded-md bg-background-secondary px-3 py-1.5 text-sm text-muted-foreground">
+            {meta.page} / {meta.lastPage}
           </span>
           <Button variant="outline" size="sm" disabled={page >= meta.lastPage} onClick={() => setTaskPage(page + 1)}>
-            Next
+            Next →
           </Button>
         </div>
       )}
@@ -238,9 +301,12 @@ export default function TasksPage() {
 
 function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
   return (
-    <span className="flex items-center gap-1.5 rounded-full border border-border bg-background-secondary px-3 py-1 text-xs text-foreground">
+    <span className={cn(
+      "interactive flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground",
+      "hover:border-primary/30 hover:bg-primary/5 hover:text-primary transition-colors",
+    )}>
       {label}
-      <button onClick={onClear} aria-label={`Clear ${label}`}>
+      <button onClick={onClear} aria-label={`Clear ${label}`} className="ml-0.5 hover:text-danger transition-colors">
         <X className="h-3 w-3" />
       </button>
     </span>

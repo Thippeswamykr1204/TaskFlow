@@ -25,7 +25,7 @@ export class OpenWeatherMapGeocodingProvider implements GeocodingProvider {
     try {
       const url = `${this.baseUrl}/direct`;
       const response = await firstValueFrom(
-        this.httpService.get(url, {
+        this.httpService.get<Array<{ lat: number; lon: number }>>(url, {
           params: {
             q: city,
             limit: 1,

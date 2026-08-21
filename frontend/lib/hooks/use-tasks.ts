@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchTasks,
+  fetchAllTasks,
   createTask,
   updateTask,
   deleteTask,
@@ -16,6 +17,13 @@ export function useTasks(filters: TaskListParams) {
     queryKey: ["tasks", "list", filters],
     queryFn: () => fetchTasks(filters),
     placeholderData: (prev) => prev, // keepPreviousData replacement, TanStack Query v5
+  });
+}
+
+export function useAllTasks() {
+  return useQuery({
+    queryKey: ["tasks", "all"],
+    queryFn: fetchAllTasks,
   });
 }
 
@@ -47,12 +55,33 @@ export function useUpdateTask() {
         });
       });
 
-      return { previousLists };
+      // Today's Focus and the all-pages Kanban board use different result
+      // shapes, so patch their already-cached tasks separately. A settled
+      // invalidation still re-fetches them to account for membership changes
+      // such as a due date moving into or out of today.
+      const previousToday = qc.getQueryData<Task[]>(["tasks", "today"]);
+      const previousAllTasks = qc.getQueryData<Task[]>(["tasks", "all"]);
+
+      if (previousToday) {
+        qc.setQueryData<Task[]>(["tasks", "today"], previousToday.map((t) => (t._id === id ? patchTask(t, input) : t)));
+      }
+
+      if (previousAllTasks) {
+        qc.setQueryData<Task[]>(["tasks", "all"], previousAllTasks.map((t) => (t._id === id ? patchTask(t, input) : t)));
+      }
+
+      return { previousLists, previousToday, previousAllTasks };
     },
     onError: (_err, _vars, context) => {
       context?.previousLists?.forEach(([key, data]) => {
         qc.setQueryData(key, data);
       });
+      if (context?.previousToday) {
+        qc.setQueryData(["tasks", "today"], context.previousToday);
+      }
+      if (context?.previousAllTasks) {
+        qc.setQueryData(["tasks", "all"], context.previousAllTasks);
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });

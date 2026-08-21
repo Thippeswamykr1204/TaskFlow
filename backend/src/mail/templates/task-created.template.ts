@@ -1,5 +1,5 @@
 import { Task } from '../../tasks/schemas/task.schema';
-import { formatDueDate, escapeHtml } from './format.util';
+import { formatDueDate, escapeHtml } from '../format.util';
 
 export interface EmailContent {
   subject: string;

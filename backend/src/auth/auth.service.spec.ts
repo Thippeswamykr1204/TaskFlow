@@ -3,12 +3,12 @@ import { getModelToken } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { User } from './schemas/user.schema';
 import { Session } from './schemas/session.schema';
 
-jest.mock('bcrypt');
+jest.mock('bcryptjs');
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -17,15 +17,24 @@ describe('AuthService', () => {
   let jwtService: JwtService;
 
   beforeEach(async () => {
-    mockUserModel = {
+    // Constructable mock: AuthService.register calls `new this.userModel(data)`,
+    // so the mock must be a jest.fn() usable as a constructor, with the static
+    // query methods attached via Object.assign — same pattern used for the
+    // Task/Attachment mock models elsewhere in this suite.
+    mockUserModel = jest.fn();
+    Object.assign(mockUserModel, {
       findOne: jest.fn(),
       findById: jest.fn(),
-    };
-    mockSessionModel = {
+    });
+    mockSessionModel = jest.fn().mockImplementation((data: any) => ({
+      ...data,
+      save: jest.fn().mockResolvedValue({ _id: 'session_id', ...data }),
+    }));
+    Object.assign(mockSessionModel, {
       findOne: jest.fn(),
       updateOne: jest.fn(),
       updateMany: jest.fn(),
-    };
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

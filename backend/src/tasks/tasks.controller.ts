@@ -37,7 +37,7 @@ import { Task } from './schemas/task.schema';
 import { AttachmentValidationPipe } from '../uploads/attachment-validation.pipe';
 
 interface AuthRequest extends Express.Request {
-  user?: { id: string; email: string };
+  user: { id: string; email: string };
 }
 
 @ApiTags('tasks')
@@ -80,7 +80,17 @@ export class TasksController {
   @HttpCode(201)
   @ApiOperation({ summary: 'Create a new task' })
   @ApiResponse({ status: 201, description: 'Task created', type: Task })
-  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'VALIDATION_ERROR' },
+        message: { type: 'string' },
+      },
+    },
+  })
   async create(@Body() dto: CreateTaskDto, @Req() req: AuthRequest) {
     const task = await this.tasksService.create(dto, req.user.id, req.user.email);
     return { success: true, data: task };
@@ -89,7 +99,17 @@ export class TasksController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a task by ID' })
   @ApiResponse({ status: 200, description: 'Task details', type: Task })
-  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Task not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'TASK_NOT_FOUND' },
+        message: { type: 'string' },
+      },
+    },
+  })
   async getOne(@Param('id') id: string, @Req() req: AuthRequest) {
     const task = await this.tasksService.findOne(id, req.user.id);
     return { success: true, data: task };
@@ -98,7 +118,17 @@ export class TasksController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update a task' })
   @ApiResponse({ status: 200, description: 'Task updated', type: Task })
-  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Task not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'TASK_NOT_FOUND' },
+        message: { type: 'string' },
+      },
+    },
+  })
   @ApiResponse({ status: 400, description: 'Validation error' })
   async update(
     @Param('id') id: string,
@@ -113,7 +143,17 @@ export class TasksController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete a task' })
   @ApiResponse({ status: 204, description: 'Task deleted' })
-  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Task not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'TASK_NOT_FOUND' },
+        message: { type: 'string' },
+      },
+    },
+  })
   async delete(@Param('id') id: string, @Req() req: AuthRequest) {
     await this.tasksService.delete(id, req.user.id);
   }
@@ -136,7 +176,17 @@ export class TasksController {
   })
   @ApiResponse({ status: 201, description: 'Attachment created', type: AttachmentResponseDto })
   @ApiResponse({ status: 400, description: 'Invalid file (type or size)' })
-  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Task not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'TASK_NOT_FOUND' },
+        message: { type: 'string' },
+      },
+    },
+  })
   @ApiResponse({ status: 502, description: 'Upload to Cloudinary failed' })
   async uploadAttachment(
     @Param('id') taskId: string,
@@ -152,7 +202,17 @@ export class TasksController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Activity history', type: [ActivityResponseDto] })
-  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Task not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'TASK_NOT_FOUND' },
+        message: { type: 'string' },
+      },
+    },
+  })
   async getActivity(
     @Param('id') taskId: string,
     @Query() query: QueryActivityDto,
@@ -172,7 +232,17 @@ export class TasksController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete an attachment from a task' })
   @ApiResponse({ status: 204, description: 'Attachment deleted' })
-  @ApiResponse({ status: 404, description: 'Task or attachment not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Task or attachment not found',
+    schema: {
+      type: 'object',
+      properties: {
+        error: { type: 'string', example: 'ATTACHMENT_NOT_FOUND' },
+        message: { type: 'string' },
+      },
+    },
+  })
   @ApiResponse({ status: 502, description: 'Cloudinary delete failed' })
   async deleteAttachment(
     @Param('id') taskId: string,

@@ -4,8 +4,9 @@ import { useRef } from "react";
 import type { MouseEvent } from "react";
 import { useMotionValue, useSpring, useTransform } from "framer-motion";
 
-const TILT_RANGE_DEG = 6;
-const SPRING_CONFIG = { stiffness: 300, damping: 30, mass: 0.5 };
+const TILT_RANGE_DEG = 3;
+const TILT_PERSPECTIVE_PX = 1200;
+const SPRING_CONFIG = { stiffness: 180, damping: 26, mass: 0.7 };
 
 export function useTilt() {
   const ref = useRef<HTMLDivElement>(null);
@@ -35,5 +36,5 @@ export function useTilt() {
     pointerY.set(0.5);
   };
 
-  return { ref, rotateX, rotateY, onMouseMove, onMouseLeave };
+  return { ref, rotateX, rotateY, transformPerspective: TILT_PERSPECTIVE_PX, onMouseMove, onMouseLeave };
 }

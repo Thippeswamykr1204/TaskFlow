@@ -24,3 +24,8 @@ export async function refreshRequest() {
 export async function logoutRequest() {
   await api.post("/auth/logout");
 }
+
+export async function updateProfileRequest(data: { name?: string; email?: string }) {
+  const res = await api.patch<User>("/auth/me", data);
+  return res.data;
+}

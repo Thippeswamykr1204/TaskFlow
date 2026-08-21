@@ -1,12 +1,11 @@
-import { Injectable, Inject } from '@nestjs/common';
-import {
-  GeocodingProvider,
-  GEOCODING_PROVIDER,
-} from './providers/geocoding.interface';
-import {
+import { Inject, Injectable } from '@nestjs/common';
+import { GEOCODING_PROVIDER } from './providers/geocoding.interface';
+import type { GeocodingProvider } from './providers/geocoding.interface';
+
+import { WEATHER_PROVIDER } from './providers/weather.interface';
+import type {
   WeatherProvider,
   WeatherData,
-  WEATHER_PROVIDER,
 } from './providers/weather.interface';
 import { InMemoryCache } from './cache/in-memory-cache';
 

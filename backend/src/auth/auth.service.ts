@@ -8,13 +8,14 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { User } from './schemas/user.schema';
 import { Session } from './schemas/session.schema';
 import { EnvConfig } from '../config/env.validation';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -173,6 +174,33 @@ export class AuthService {
       { user: userId, revokedAt: null },
       { revokedAt: new Date() },
     );
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    if (dto.email) {
+      const existing = await this.userModel.findOne({ email: dto.email, _id: { $ne: userId } });
+      if (existing) {
+        throw new ConflictException({
+          error: 'AUTH_EMAIL_EXISTS',
+          message: 'Email already registered',
+        });
+      }
+    }
+
+    const updated = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $set: dto },
+      { new: true }
+    );
+
+    if (!updated) {
+      throw new UnauthorizedException({
+        error: 'AUTH_USER_NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+
+    return this.sanitizeUser(updated);
   }
 
   private async issueTokens(

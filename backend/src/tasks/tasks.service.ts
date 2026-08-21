@@ -15,7 +15,7 @@ import { ActivityAction } from './schemas/activity-log.schema';
 import { MailService } from '../mail/mail.service';
 import { LocationService } from '../location/location.service';
 
-interface TasksResponse {
+export interface TasksResponse {
   success: boolean;
   data: Task[];
   meta: {
@@ -25,7 +25,7 @@ interface TasksResponse {
   };
 }
 
-interface TaskStats {
+export interface TaskStats {
   total: number;
   byStatus: Record<TaskStatus, number>;
   byPriority: Record<Priority, number>;

@@ -3,6 +3,8 @@ import { getModelToken } from '@nestjs/mongoose';
 import { TasksService } from './tasks.service';
 import { Task, TaskStatus, Priority } from './schemas/task.schema';
 import { AttachmentsService } from './attachments.service';
+import { ActivityService } from './activity.service';
+import { LocationService } from '../location/location.service';
 import { MailService } from '../mail/mail.service';
 import { NotFoundException } from '@nestjs/common';
 
@@ -10,10 +12,20 @@ describe('TasksService', () => {
   let service: TasksService;
   let mockTaskModel: any;
   let mockAttachmentsService: Partial<AttachmentsService>;
+  let mockActivityService: Partial<ActivityService>;
+  let mockLocationService: Partial<LocationService>;
   let mockMailService: Partial<MailService>;
 
   beforeEach(async () => {
-    mockTaskModel = {
+    // Constructable mock: TasksService.create/etc call `new this.taskModel(data)`,
+    // so the mock model itself must be a jest.fn() usable as a constructor,
+    // with the static query methods attached via Object.assign — matching the
+    // pattern used for the Attachment mock model in attachments.service.spec.ts.
+    mockTaskModel = jest.fn().mockImplementation((data) => ({
+      ...data,
+      save: jest.fn().mockResolvedValue({ _id: 'task1', ...data }),
+    }));
+    Object.assign(mockTaskModel, {
       create: jest.fn(),
       find: jest.fn().mockReturnThis(),
       findOne: jest.fn(),
@@ -25,10 +37,19 @@ describe('TasksService', () => {
       skip: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       exec: jest.fn(),
-    };
+    });
 
     mockAttachmentsService = {
       deleteAllForTask: jest.fn(),
+    };
+
+    mockActivityService = {
+      record: jest.fn().mockResolvedValue(undefined),
+      deleteAllForTask: jest.fn().mockResolvedValue(undefined),
+    };
+
+    mockLocationService = {
+      resolveLocation: jest.fn(),
     };
 
     mockMailService = {
@@ -44,6 +65,8 @@ describe('TasksService', () => {
           useValue: mockTaskModel,
         },
         { provide: AttachmentsService, useValue: mockAttachmentsService },
+        { provide: ActivityService, useValue: mockActivityService },
+        { provide: LocationService, useValue: mockLocationService },
         { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
@@ -62,8 +85,10 @@ describe('TasksService', () => {
       const dto = { title: 'Test Task', description: 'Test' };
       const mockTask = { _id: 'task1', ...dto, user: userId };
 
-      mockTaskModel.prototype.save = jest.fn().mockResolvedValue(mockTask);
-      jest.spyOn(mockTaskModel, 'create').mockImplementation(() => mockTask);
+      mockTaskModel.mockImplementation((data: any) => ({
+        ...data,
+        save: jest.fn().mockResolvedValue(mockTask),
+      }));
 
       const task = await service.create(dto as any, userId, userEmail);
 

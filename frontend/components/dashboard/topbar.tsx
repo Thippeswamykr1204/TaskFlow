@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Search, Bell, ChevronDown, LogOut } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Bell, ChevronDown, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { logoutRequest } from "@/lib/api/auth";
+import { useLogout } from "@/lib/hooks/use-logout";
 
 function initials(name: string) {
   return name
@@ -21,51 +21,58 @@ function initials(name: string) {
     .join("");
 }
 
-export function Topbar() {
-  const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const clearSession = useAuthStore((s) => s.clearSession);
+const pageTitles: Record<string, string> = {
+  "/dashboard": "Overview",
+  "/tasks": "My Tasks",
+  "/kanban": "Kanban Board",
+  "/analytics": "Analytics",
+  "/settings": "Settings",
+};
 
-  const handleLogout = async () => {
-    try {
-      await logoutRequest();
-    } finally {
-      clearSession();
-      router.replace("/login");
-    }
-  };
+export function Topbar() {
+  const user = useAuthStore((s) => s.user);
+  const handleLogout = useLogout();
+  const pathname = usePathname();
+  const pageTitle = pageTitles[pathname] ?? "Dashboard";
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-background px-6">
-      <div className="relative w-full max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Search tasks..."
-          disabled
-          className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-14 text-sm text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"
-        />
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border bg-background-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-          ⌘K
-        </span>
+    <header className="flex h-16 shrink-0 items-center border-b border-border bg-background/80 px-6 backdrop-blur-sm">
+      {/* Page breadcrumb */}
+      <div className="flex items-center gap-2.5">
+        <span className="font-heading text-lg font-semibold text-foreground">{pageTitle}</span>
       </div>
 
-      <div className="flex items-center gap-5">
-        <button className="relative text-muted-foreground transition-colors hover:text-foreground" aria-label="Notifications">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary" />
+      {/* Right actions */}
+      <div className="ml-auto flex items-center gap-4">
+        {/* Notification bell */}
+        <button
+          className="interactive relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          aria-label="Notifications"
+        >
+          <Bell className="h-4.5 w-4.5" />
+          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary ring-2 ring-background" />
         </button>
 
+        {/* Divider */}
+        <span className="h-5 w-px bg-border" />
+
+        {/* User menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 outline-none">
-            <Avatar>
-              <AvatarFallback>{user ? initials(user.name) : "?"}</AvatarFallback>
+          <DropdownMenuTrigger className="interactive flex items-center gap-2.5 rounded-lg px-2 py-1.5 outline-none transition-colors hover:bg-background-secondary focus-visible:ring-2 focus-visible:ring-primary/40">
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
+                {user ? initials(user.name) : "?"}
+              </AvatarFallback>
             </Avatar>
-            <span className="text-sm font-medium text-foreground">{user?.name}</span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <span className="hidden text-sm font-medium text-foreground sm:inline">{user?.name}</span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleLogout}>
+          <DropdownMenuContent align="end" className="min-w-[160px]">
+            <div className="px-3 py-2 border-b border-border mb-1">
+              <p className="text-xs font-medium text-foreground truncate">{user?.name}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <DropdownMenuItem onClick={handleLogout} className="text-danger focus:text-danger focus:bg-danger-bg">
               <LogOut className="h-4 w-4" />
               Log out
             </DropdownMenuItem>

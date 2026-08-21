@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { isAxiosError } from "axios";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, MapPin, ChevronDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,7 @@ import { useUiStore } from "@/lib/store/ui-store";
 import { useCreateTask, useUpdateTask, useDeleteTask, useTasks } from "@/lib/hooks/use-tasks";
 import { taskFormSchema, taskStatusValues, priorityValues, type TaskFormValues } from "@/lib/validation/task-schemas";
 import type { Task, CreateTaskInput, UpdateTaskInput } from "@/types/task";
+import { cn } from "@/lib/utils";
 
 const statusLabel: Record<(typeof taskStatusValues)[number], string> = {
   BACKLOG: "Backlog",
@@ -41,16 +42,7 @@ const priorityLabel: Record<(typeof priorityValues)[number], string> = {
 
 function toFormValues(task?: Task): TaskFormValues {
   if (!task) {
-    return {
-      title: "",
-      description: "",
-      status: "BACKLOG",
-      priority: "MEDIUM",
-      dueDate: "",
-      city: "",
-      tags: [],
-      subtasks: [],
-    };
+    return { title: "", description: "", status: "BACKLOG", priority: "MEDIUM", dueDate: "", city: "", tags: [], subtasks: [] };
   }
   return {
     title: task.title,
@@ -77,6 +69,26 @@ function toApiInput(values: TaskFormValues): CreateTaskInput {
   };
 }
 
+// ─── Field wrapper with error state ──────────────────────────────────────────
+function Field({ label, htmlFor, error, children, hint }: {
+  label: string;
+  htmlFor?: string;
+  error?: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={htmlFor} className={cn(error && "text-danger")}>{label}</Label>
+      <div className={cn(error && "[&>input]:border-danger [&>input]:focus-visible:ring-danger/30 [&>select]:border-danger [&>textarea]:border-danger")}>
+        {children}
+      </div>
+      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 export function TaskFormModal() {
   const taskModalOpen = useUiStore((s) => s.taskModalOpen);
   const editingTaskId = useUiStore((s) => s.editingTaskId);
@@ -84,7 +96,6 @@ export function TaskFormModal() {
   const filters = useUiStore((s) => s.taskFilters);
   const page = useUiStore((s) => s.taskPage);
 
-  // Find the task being edited from the currently-loaded list page — avoids a second fetch.
   const list = useTasks({ page, limit: 20, ...normalizeFilters(filters) });
   const editingTask = editingTaskId ? list.data?.data.find((t) => t._id === editingTaskId) : undefined;
   const isEdit = !!editingTaskId;
@@ -97,10 +108,10 @@ export function TaskFormModal() {
   const [tagDraft, setTagDraft] = useState("");
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
 
   const {
     register,
-    control,
     handleSubmit,
     reset,
     watch,
@@ -111,17 +122,27 @@ export function TaskFormModal() {
     defaultValues: toFormValues(editingTask),
   });
 
+  const initializedForRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (taskModalOpen) {
-      reset(toFormValues(editingTask));
-      setApiError(null);
-      setConfirmingDelete(false);
-      setTagDraft("");
-      setSubtaskDraft("");
+    if (!taskModalOpen) {
+      initializedForRef.current = null;
+      return;
     }
-    // Only re-run when the modal opens or the target task changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskModalOpen, editingTaskId]);
+    const target = editingTaskId ?? "create";
+    if (initializedForRef.current === target) return;
+    if (isEdit && !editingTask && list.isLoading) return;
+
+    const vals = toFormValues(editingTask);
+    reset(vals);
+    setApiError(null);
+    setConfirmingDelete(false);
+    setTagDraft("");
+    setSubtaskDraft("");
+    // Expand city section if editing and city already set
+    setCityOpen(isEdit && !!vals.city);
+    initializedForRef.current = target;
+  }, [taskModalOpen, editingTaskId, editingTask, isEdit, list.isLoading, reset]);
 
   const description = watch("description") ?? "";
   const tags = watch("tags");
@@ -152,7 +173,6 @@ export function TaskFormModal() {
     }
   };
 
-  // Toggle a subtask's done state — in edit mode, fire the optimistic update immediately.
   const toggleSubtask = (index: number) => {
     const next = subtasks.map((s, i) => (i === index ? { ...s, done: !s.done } : s));
     setValue("subtasks", next);
@@ -177,60 +197,59 @@ export function TaskFormModal() {
 
   return (
     <Dialog open={taskModalOpen} onOpenChange={(open) => !open && closeTaskModal()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Task" : "New Task"}</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 gap-0">
+        {/* Modal header */}
+        <DialogHeader className="shrink-0 border-b border-border px-6 pt-6 pb-4">
+          <DialogTitle className="font-heading text-xl">{isEdit ? "Edit Task" : "New Task"}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
             {isEdit ? "Update the task details below." : "Fill in the details for your new task."}
           </DialogDescription>
         </DialogHeader>
 
-        {apiError && (
-          <div className="mb-4">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {apiError && (
             <ErrorBanner message={apiError} onDismiss={() => setApiError(null)} />
-          </div>
-        )}
+          )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-          <div className="space-y-1.5">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" {...register("title")} />
-            {errors.title && <p className="text-xs text-danger">{errors.title.message}</p>}
-          </div>
+          <Field label="Title" htmlFor="title" error={errors.title?.message}>
+            <Input
+              id="title"
+              {...register("title")}
+              className={cn(errors.title && "border-danger focus-visible:ring-danger/30")}
+            />
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="description">Description</Label>
+          <Field label="Description" htmlFor="description" error={errors.description?.message}>
             <textarea
               id="description"
-              rows={4}
+              rows={3}
               maxLength={5000}
               {...register("description")}
-              className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary"
+              className={cn(
+                "flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary",
+                errors.description && "border-danger focus-visible:ring-danger/30",
+              )}
             />
             {description.length > 4500 && (
-              <p className="text-xs text-muted-foreground">{description.length}/5000</p>
+              <p className="text-xs text-muted-foreground mt-1">{description.length}/5000</p>
             )}
-            {errors.description && <p className="text-xs text-danger">{errors.description.message}</p>}
-          </div>
+          </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Status</Label>
+            <Field label="Status" htmlFor="status">
               <select
                 id="status"
                 {...register("status")}
                 className="flex h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
                 {taskStatusValues.map((s) => (
-                  <option key={s} value={s}>
-                    {statusLabel[s]}
-                  </option>
+                  <option key={s} value={s}>{statusLabel[s]}</option>
                 ))}
               </select>
-            </div>
+            </Field>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="priority">Priority</Label>
+            <Field label="Priority" htmlFor="priority">
               <select
                 id="priority"
                 {...register("priority")}
@@ -238,68 +257,51 @@ export function TaskFormModal() {
                 style={{ color: `var(--priority-${watch("priority").toLowerCase()}, var(--foreground))` }}
               >
                 {priorityValues.map((p) => (
-                  <option key={p} value={p}>
-                    {priorityLabel[p]}
-                  </option>
+                  <option key={p} value={p}>{priorityLabel[p]}</option>
                 ))}
               </select>
-            </div>
+            </Field>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="dueDate">Due date</Label>
+          <Field label="Due date" htmlFor="dueDate">
             <Input id="dueDate" type="date" {...register("dueDate")} />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="city">City</Label>
-            <Input id="city" placeholder="San Francisco" {...register("city")} />
-            <p className="text-xs text-muted-foreground">Used to show local weather.</p>
-            {city && (
-              <div className="pt-1">
-                <WeatherChip city={city} variant="field" />
-              </div>
-            )}
-          </div>
-
+          {/* Tags */}
           <div className="space-y-1.5">
             <Label>Tags</Label>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((t) => (
-                <span key={t} className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs">
-                  {t}
-                  <button type="button" onClick={() => setValue("tags", tags.filter((x) => x !== t))}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((t) => (
+                  <span key={t} className="flex items-center gap-1 rounded-full bg-primary/8 px-2.5 py-1 text-xs text-primary">
+                    {t}
+                    <button type="button" onClick={() => setValue("tags", tags.filter((x) => x !== t))} className="hover:text-danger">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <Input
               placeholder="Type a tag, press Enter"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addTag();
-                }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
             />
           </div>
 
+          {/* Subtasks */}
           <div className="space-y-1.5">
             <Label>Subtasks</Label>
             <div className="space-y-2">
               {subtasks.map((s, i) => (
-                <div key={s._id ?? i} className="flex items-center gap-2">
+                <div key={s._id ?? i} className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
                   <Checkbox checked={s.done} onCheckedChange={() => toggleSubtask(i)} />
-                  <span className={s.done ? "flex-1 text-sm text-muted-foreground line-through" : "flex-1 text-sm"}>
-                    {s.title}
-                  </span>
+                  <span className={cn("flex-1 text-sm", s.done && "text-muted-foreground line-through")}>{s.title}</span>
                   <button
                     type="button"
                     onClick={() => setValue("subtasks", subtasks.filter((_, idx) => idx !== i))}
-                    className="text-muted-foreground hover:text-danger"
+                    className="text-muted-foreground hover:text-danger transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -311,12 +313,7 @@ export function TaskFormModal() {
                 placeholder="Add a subtask, press Enter"
                 value={subtaskDraft}
                 onChange={(e) => setSubtaskDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addSubtask();
-                  }
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
               />
               <Button type="button" variant="outline" size="icon" onClick={addSubtask}>
                 <Plus className="h-4 w-4" />
@@ -324,13 +321,41 @@ export function TaskFormModal() {
             </div>
           </div>
 
+          {/* ── Optional / Advanced section (City) ── */}
+          <div className="rounded-lg border border-border/60 bg-background-secondary/40">
+            <button
+              type="button"
+              onClick={() => setCityOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" />
+                Optional — Location &amp; Weather
+                {city && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{city}</span>}
+              </span>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", cityOpen && "rotate-180")} />
+            </button>
+
+            {cityOpen && (
+              <div className="border-t border-border/60 px-4 pb-4 pt-3 space-y-3">
+                <p className="text-xs text-muted-foreground">Enter a city to display local weather on this task.</p>
+                <Input id="city" placeholder="e.g. San Francisco" {...register("city")} />
+                {city && (
+                  <div className="pt-1">
+                    <WeatherChip city={city} variant="field" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {isEdit && editingTaskId && <TaskAttachments taskId={editingTaskId} />}
+          {isEdit && editingTaskId && <TaskActivity taskId={editingTaskId} enabled={taskModalOpen} />}
+        </div>
 
-          {isEdit && editingTaskId && (
-            <TaskActivity taskId={editingTaskId} enabled={taskModalOpen} />
-          )}
-
-          <div className="flex items-center justify-between pt-2">
+        {/* ── Sticky footer ── */}
+        <div className="shrink-0 border-t border-border bg-background px-6 py-4">
+          <div className="flex items-center justify-between">
             {isEdit ? (
               confirmingDelete ? (
                 <div className="flex items-center gap-2 text-sm">
@@ -341,7 +366,7 @@ export function TaskFormModal() {
                   <Button
                     type="button"
                     size="sm"
-                    className="bg-danger text-primary-foreground hover:bg-danger"
+                    className="bg-danger text-primary-foreground hover:bg-danger/90"
                     onClick={handleDelete}
                     disabled={deleteTask.isPending}
                   >
@@ -349,19 +374,27 @@ export function TaskFormModal() {
                   </Button>
                 </div>
               ) : (
-                <Button type="button" variant="ghost" size="sm" className="text-danger" onClick={() => setConfirmingDelete(true)}>
-                  Delete
+                <Button type="button" variant="ghost" size="sm" className="text-danger hover:text-danger hover:bg-danger-bg" onClick={() => setConfirmingDelete(true)}>
+                  Delete task
                 </Button>
               )
             ) : (
               <span />
             )}
 
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Task"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={closeTaskModal}>
+                Cancel
+              </Button>
+              <Button type="submit" form="task-form" disabled={isSubmitting}>
+                {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Task"}
+              </Button>
+            </div>
           </div>
-        </form>
+        </div>
+
+        {/* Form (separate from the sticky footer buttons — linked via form id) */}
+        <form id="task-form" onSubmit={handleSubmit(onSubmit)} className="hidden" noValidate />
       </DialogContent>
     </Dialog>
   );

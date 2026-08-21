@@ -5,12 +5,14 @@ import { AttachmentsService } from './attachments.service';
 import { Attachment } from './schemas/attachment.schema';
 import { Task } from './schemas/task.schema';
 import { CloudinaryService } from '../uploads/cloudinary.service';
+import { ActivityService } from './activity.service';
 
 describe('AttachmentsService', () => {
   let service: AttachmentsService;
   let mockAttachmentModel: any;
   let mockTaskModel: any;
   let mockCloudinaryService: Partial<CloudinaryService>;
+  let mockActivityService: Partial<ActivityService>;
 
   beforeEach(async () => {
     mockAttachmentModel = jest.fn().mockImplementation((data) => ({
@@ -31,12 +33,18 @@ describe('AttachmentsService', () => {
       destroy: jest.fn(),
     };
 
+    mockActivityService = {
+      record: jest.fn().mockResolvedValue(undefined),
+      deleteAllForTask: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AttachmentsService,
         { provide: getModelToken(Attachment.name), useValue: mockAttachmentModel },
         { provide: getModelToken(Task.name), useValue: mockTaskModel },
         { provide: CloudinaryService, useValue: mockCloudinaryService },
+        { provide: ActivityService, useValue: mockActivityService },
       ],
     }).compile();
 
