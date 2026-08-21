@@ -26,7 +26,14 @@ export class OpenWeatherMapWeatherProvider implements WeatherProvider {
     try {
       const url = `${this.baseUrl}/weather`;
       const response = await firstValueFrom(
-        this.httpService.get<OpenWeatherResponse>(url),
+        this.httpService.get<OpenWeatherResponse>(url, {
+          params: {
+            lat,
+            lon: lng,
+            appid: this.apiKey,
+            units: 'metric',
+          },
+        }),
       );
 
       const data = response.data;
